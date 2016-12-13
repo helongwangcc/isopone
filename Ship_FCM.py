@@ -874,5 +874,3 @@ class Ship_FCM:
         
 s = Ship_FCM()
 
-p = s.weather2fuel(20,20,0.3,0.1,12,6,8,2,11,80)
-v = s.speed_fit(20,20,0.3,0.1,12,6,8,2,11,80)
