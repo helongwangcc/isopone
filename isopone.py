@@ -30,7 +30,7 @@ class isop_node(object):
         self.fuel_kg_per_hour = 0.0
         self.fuel_kg_per_nm = 0.0
 
-def isopone(departure, destination, delta_c, m, Vs, delta_t, delta_d, k, Initial_time, Initial_fuelc):
+def isopone(departure, destination, delta_c, m, Vs, fuel_constraint, delta_d, k, Initial_time, Initial_fuelc):
     '''
     delta_c = increment of heading
     m       = number of heading
@@ -41,11 +41,9 @@ def isopone(departure, destination, delta_c, m, Vs, delta_t, delta_d, k, Initial
     '''
     trimmed = {}
     node_dict = {}
-    fuel_limit = 10000
+    fuel_limit = fuel_constraint
     # DISTANCE AND BEARING TO THE DESTINATION
     total_dist, init_bearing = greatcircle_inverse(departure[0], departure[1], destination[0], destination[1]) 
-    # NUMBER OF SECTIONS
-    number_section = np.int(np.floor(total_dist/ (Vs * 1.852 * delta_t)))
     # DEFINE START POINT
     startpoint = isop_node(departure[0], departure[1], init_bearing)
     startpoint.time = Initial_time
@@ -220,7 +218,7 @@ p_dep = np.array([-5.0, 49.0])
 # destination
 p_des = np.array([-73.0, 40.0])
 # construct route 2
-isop_set = isopone(p_dep, p_des, 1, 20, 20, 6, 2, 20, tran_timec, tran_fuelc)
+isop_set = isopone(p_dep, p_des, 1, 20, 20, 20000, 2, 20, tran_timec, tran_fuelc)
 
 def construct_isop_path(isop_set):
     last_set_num = max(isop_set.keys())
