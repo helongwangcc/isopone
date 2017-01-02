@@ -326,7 +326,7 @@ class Ship_FCM:
 
     #############################################################################################################
     # 2), added resistance due to wind
-    def R_wind(self, wind_U, wind_V, V_gps, heading_ship):
+    def R_wind(self, wind_U, wind_V, V_gps, heading_ship,  shiptype):
 
         """  
         Function R_wind(wind_U, wind_V, V_gps, heading_ship)
@@ -335,6 +335,12 @@ class Ship_FCM:
             wind_V         [knots]:  wind speed in vertical direction
             V_gps          [knots]:  a ship's actual sailing speed when planning routes. Unit:
             heading_ship  [degree]:  a ship's course heading, 0--> north, 90 --> east, 180 -->south, 270 --> west
+            shiptype              :  1, General cargo[Default]
+                                     2, Conventional tanker
+                                     3, Cylindrical bow tanker
+                                     4, Container
+                                     5, Cruise ferry
+                                     6, Car Carrier
             
 
             Output: R_wind, Unit: [kN] 
@@ -344,6 +350,12 @@ class Ship_FCM:
         NB: the side drifting force and angle are not considered in the current investigation
 
         """
+        if not shiptype:
+            shiptype = 1
+            print('No input of ship type: By default General cargo!')
+
+
+
         ship_heading = heading_ship
 
         ro_air = self.ro_air  # air density in unit [kg/m3]
@@ -354,36 +366,97 @@ class Ship_FCM:
 
 
 
-        # the get the wind heading angle [deg]
-        rads = np.arctan2(wind_U, wind_V) + np.pi   #NB: add np.pi is to change the definition of wind direction
-        rads %= 2 * np.pi
-        wind_heading = np.rad2deg(rads)
-        V_wind = np.sqrt(np.power(wind_U, 2) + np.power(wind_V, 2))  
+
+
+        # get the apparent wind direction and apparent wind speed (i.e. apparent wind velocity)
+        ship_U = V_ship * np.sin(np.radians(ship_heading))
+        ship_V = V_ship * np.cos(np.radians(ship_heading))
+
+        appwind_U = wind_U - ship_U
+        appwind_V = wind_V - ship_V
+
+        appwind_spd = np.sqrt(np.power(appwind_U, 2) + np.power(appwind_V, 2))
+        appwind_hdg = np.degrees(np.arctan2(appwind_U, appwind_V))
+        
+ 
 
         # relative heading between ship course and wind blowing [degrees]
-        tan_value = V_wind * np.sin(np.radians(wind_heading - ship_heading)) / (V_ship + V_wind * np.cos(np.radians(wind_heading - ship_heading)))
-        ind = V_ship + V_wind * np.cos(np.radians(wind_heading - ship_heading))
-        heading_ship2wind = np.where(ind != 0, np.degrees(np.arctan(tan_value)), np.degrees(np.arctan(tan_value)) + 180.0)
-#        if V_ship + V_wind * np.cos(np.radians(wind_heading - ship_heading)):    
-#            heading_ship2wind = np.degrees(np.arctan(tan_value))
-#        else:
-#            heading_ship2wind = np.degrees(np.arctan(tan_value)) + 180.0
+        heading_ship2wind = np.array(appwind_hdg)
+        heading_ship2wind[heading_ship2wind < 0] = heading_ship2wind[heading_ship2wind < 0] + 360
+
 
 
         # relative wind speed [m/s]
-        V_relative = np.sqrt(np.power(V_wind, 2) + np.power(V_ship, 2) + 2 * V_wind * V_ship * np.cos(np.deg2rad(wind_heading - ship_heading)))         # relative wind speed along ship course [m/s]
-        
+        V_relative =  np.array(appwind_spd)       # relative wind speed along ship course [m/s]
+
+        print 'Apparent wind', heading_ship2wind, V_relative/0.5144
+
+
         # ship's transverse projection area including superstrucures [m^2]
         A_transverse = 1500       
 
-        R_wind = 0.001 * 0.5 * ro_air * self.C_AA (heading_ship2wind) * A_transverse * np.power(V_relative, 2) \
-                - 0.001 * 0.5 * ro_air * self.C_AA (0) *  A_transverse * np.power(V_ship, 2)
+        R_wind = 0.001 * 0.5 * ro_air * self.C_AA (heading_ship2wind, shiptype) * A_transverse * np.power(V_relative, 2) \
+                #- 0.001 * 0.5 * ro_air * self.C_AA (0, shiptype) *  A_transverse * np.power(V_ship, 2)
 
         return R_wind
 
+    # 2.1) get the wind resistance coefficiency
+    def C_AA(self, heading_ship2wind, shiptype):
+        """
+        Function C_AA(heading_ship2wind)
+        
+            heading_ship2wind [degree] -- angles between a ship's GPS course heading and wind blowing
+            shiptype -- 1, General cargo[Default]
+                        2, Conventional tanker
+                        3, Cylindrical bow tanker
+                        4, Container
+                        5, Cruise ferry
+                        6, Car Carrier
+
+        Output: C_AA is the wind force coefficiency according to Test from ISO15016 for different ship types
+
+        """
+        from scipy import interpolate
+
+        Heading = np.arange(0, 185, 10)
+
+        if not shiptype:
+            shiptype = 1
+            print('No input of ship type: By default General cargo!')
+
+        if shiptype == 1:
+            print ('This is a GENERAL CARGO')
+            Caa = [0.55, 0.90, 1.0, 1.0, 0.9, 0.87, 0.62, 0.45, 0.25, 0.1, -0.1, -0.48, -0.85, -1.0, -1.42, -1.49, -1.38, -0.9, -0.85]
+        elif shiptype == 2:
+            print ('This is a CONVENTINAL TANKER')
+            Caa = [0.90, 0.87, 0.8, 0.7, 0.6, 0.5, 0.35, 0.15, 0.05, -0.05, -0.1, -0.21, -0.25, -0.40, -0.55, -0.60, -0.65, -0.70, -0.67 ]
+        elif shiptype == 3:   # not finished yet
+            print ('This is a Cylindrical bow tanker')
+            Caa = [0.55, 0.90, 1.0, 1.0, 0.9, 0.87, 0.62, 0.45, 0.25, 0.1, -0.1, -0.48, -0.85, -1.0, -1.42, -1.49, -1.38, -0.9, -0.85]
+        elif shiptype == 4:   # not finished yet
+            print ('This is a CONTAINER SHIP')
+            Caa = [0.55, 0.90, 1.0, 1.0, 0.9, 0.87, 0.62, 0.45, 0.25, 0.1, -0.1, -0.48, -0.85, -1.0, -1.42, -1.49, -1.38, -0.9, -0.85]
+        elif shiptype == 5: 
+            print ('This is a CRUISE FERRY')
+            Caa = [0.70, 0.72, 0.74, 0.70, 0.25, 0.20, 0.22, 0.0, -0.23, -0.03, 0.05, 0.05, -0.10, -0.25, -0.55, -0.75, -0.80, -0.75, -0.70]
+        else : # not finished yet
+            print ('Shiptype == 6: This is a CAR CARRIER')
+            Caa = [0.55, 0.90, 1.0, 1.0, 0.9, 0.87, 0.62, 0.45, 0.25, 0.1, -0.1, -0.48, -0.85, -1.0, -1.42, -1.49, -1.38, -0.9, -0.85]
+
+        heading_ship2wind = np.array(heading_ship2wind)
+        heading_ship2wind[heading_ship2wind < 0.0001] = 0.0001
+        heading_ship2wind[heading_ship2wind > 180] = 360 - heading_ship2wind[heading_ship2wind > 180]
+
+        f_caa = interpolate.interp1d(Heading, Caa)
+        C_AA = f_caa(heading_ship2wind)
+
+        return C_AA
+
+
+
 
     # 2.1) get the wind resistance coefficiency
-    def C_AA(self, heading_ship2wind):
+    def C_AA_Fujiwara(self, heading_ship2wind):
         """
         Function C_AA(heading_ship2wind)
         
@@ -442,23 +515,13 @@ class Ship_FCM:
         C_XLI = np.where(heading_ship2wind < 90, sigma10 + sigma11 * A_LV / L_OA / H_BR + sigma12 * A_XV / B / H_BR, sigma20 + sigma21 * A_LV / L_OA / H_BR + sigma22 * A_XV / A_LV + sigma23 * B / L_OA + sigma24 * A_XV /B / H_BR)
         C_ALF = np.where(heading_ship2wind < 90, eta10 + eta11 * A_OD / A_LV + eta12 * B / L_OA, eta20 + eta21 * A_OD / A_LV)
 
-#        if heading_ship2wind < 90:
-#            C_LF  = beta10 + beta11 * A_LV / L_OA / B + beta12 * C_MC / L_OA
-#            C_XLI = sigma10 + sigma11 * A_LV / L_OA / H_BR + sigma12 * A_XV / B / H_BR
-#            C_ALF = eta10 + eta11 * A_OD / A_LV + eta12 * B / L_OA
-#        
-#        else:
-#            C_LF  = beta20 + beta21 * B / L_OA + beta22 * H_C / L_OA + beta23 * A_OD / L_OA / L_OA + beta24 * A_XV /np.power(B, 2)
-#            C_XLI = sigma20 + sigma21 * A_LV / L_OA / H_BR + sigma22 * A_XV / A_LV + sigma23 * B / L_OA + sigma24 * A_XV /B / H_BR
-#            C_ALF = eta20 + eta21 * A_OD / A_LV
-
         
-        C_AA = C_LF * np.cos(np.deg2rad(heading_ship2wind)) + C_XLI * (np.sin(np.deg2rad(heading_ship2wind)) -      \
+        C_AA_Fujiwara = C_LF * np.cos(np.deg2rad(heading_ship2wind)) + C_XLI * (np.sin(np.deg2rad(heading_ship2wind)) -      \
                 0.5 * np.sin(np.deg2rad(heading_ship2wind)) * np.power(np.cos(np.deg2rad(heading_ship2wind)), 2)) * \
                 np.sin(np.deg2rad(heading_ship2wind)) * np.cos(np.deg2rad(heading_ship2wind)) + C_ALF *             \
                 np.sin(np.deg2rad(heading_ship2wind)) * np.power(np.cos(np.deg2rad(heading_ship2wind)), 3)
 
-        return C_AA
+        return C_AA_Fujiwara
 
     ##############################################################################################################
     # 3.0) For wave resistance calculation, one needs have correct wave spectrum, here we use Peirson_Moskowtz spectrum
@@ -551,13 +614,13 @@ class Ship_FCM:
         if Hs > 1:
             factor1 =  np.power(Hs* np.sqrt(ship_length / 100), 1.0)   # first guest formula
         else:
-            factor1 = np.power(Hs* np.sqrt(ship_length / 100), 0.1)   # first guest formula, need further research
+            factor1 = np.power(Hs* np.sqrt(ship_length / 100), 0.5)   # first guest formula, need further research
 
         # Mod 2: effect due to heading & Tp through the encountered wave frequency
-        factor2 = np.abs(omegaE) / omegaE_0
+        factor2 = np.abs(omegaE) / omegaE_0 * np.power(V_water/20.0, 3.5)
 
         # Mod 3: effect due to the wave heading
-        factor3 = (9.0 +np.cos(np.radians(2*alpha))) / 10.0
+        factor3 = (9.0 +np.cos(np.radians(2*alpha))) / 10.0 /np.power(Hs, 1.15)
 
         R_wave = R_wave_STA1 * factor1 * factor2 * factor3 * 1e-3
 
@@ -720,7 +783,7 @@ class Ship_FCM:
         return etaR, etaO, etaS, etaH
 
 
-    def weather2fuel(self, V_gps, heading_ship, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft = 6.8):
+    def weather2fuel(self, V_gps, heading_ship, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft = 6.8, shiptype = 1):
         
         """
         Function weather2fuel(self, V_gps, heading_ship, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft = 6.8)
@@ -751,7 +814,7 @@ class Ship_FCM:
 
 
         R_calm    = self.R_calmwater(V_water, draft = 6.8)
-        R_wind    = self.R_wind(wind_U, wind_V, V_gps, heading_ship,)
+        R_wind    = self.R_wind(wind_U, wind_V, V_gps, heading_ship, shiptype)
         R_wave    = self.R_wave(Hs, Tp, heading_wave, V_water, heading_ship)
 #        print R_calm
 #        print R_wave
@@ -771,8 +834,6 @@ class Ship_FCM:
         V = V_water * 0.51444  # V unit [m/s]
 
 
-
-       
 
         # Effective power
         pE  = rTotal * V
@@ -838,7 +899,8 @@ class Ship_FCM:
             a2 = pow(self.fr, 1.5) * np.exp(-3.5 * self.fr)
         # part of mean omega equation
         para1 = np.sqrt(self.Lpp / self.g) * np.power(kyy / self.Lpp, 1.0 / 3) / 1.17
-        print para1
+
+        #print para1
         if self.fr < 0.05:
             mean_omega = para1 * np.power(0.05, 0.143) * omega
         else:
@@ -856,6 +918,89 @@ class Ship_FCM:
         # RAW
         Raw = Rawm + Rawr
         return Raw / 1000
+
+    def speed_reduce(V, BN, disp, headAngleDegree, fr, C_B, loadCon = 1):
+        '''
+                 reduced_v  = reduced speed [m/s2]
+                     V  = ship speed before reduction [m/s]
+                    BN  = Beaufort number
+                  disp  = displacement volume moulded [m3]
+       headAngleDegree  = weather direction [deg]
+                    fr  = Froude number
+                   C_B  = Block coefficient
+               loadCon  = 1 for laden or normal, 0 for ballast
+        '''
+        if (BN > 12) or (BN < 0):
+            return
+            # the weather direction reduction factor
+        if headAngleDegree < 30:
+            cBeta = 0.5 * 3.0
+        elif (headAngleDegree >= 30) & (headAngleDegree < 60):
+            # cBeta = 0.5 * (2.3 - 0.03 * ((BN - 4)^2));
+            # for the euqation above, it comes from the paper of Ruihua LU, 2013,
+            # Low Carbon Shipping Conference, London, Voyeage Optimisation:
+            # Prediction of ship specific fuel consumption for energy efficient
+            # shipping
+            cBeta = 0.5 * (1.7 - 0.03 * np.power(BN - 4, 2))
+        elif (headAngleDegree >= 60) & (headAngleDegree < 150):
+            # cBeta = 0.5 * (1.5 - 0.06 * ((BN - 6)^2));
+            # for the euqation above, it comes from the paper of Ruihua LU, 2013,
+            # Low Carbon Shipping Conference, London, Voyeage Optimisation:
+            # Prediction of ship specific fuel consumption for energy efficient
+            # shipping
+            cBeta = 0.5 * (0.9 - 0.06 * np.power(BN - 6, 2))
+        elif (headAngleDegree >= 150) & (headAngleDegree < 180):
+            cBeta = 0.5 * (0.4 - 0.03 * np.power(BN - 8, 2))
+    ##    else:
+    ##        cBeta = 1
+    #    # the factor alpha for block coefficient and Froude number
+        alpha = 0 # initialize the alpha
+        if not loadCon: # laden or normal condition
+            if C_B <= 0.55:
+                alpha = 1.7 - 1.4 * fr - 7.4 * np.power(fr,2)
+            elif C_B <= 0.60:
+                alpha = 2.2 - 2.5 * fr - 9.7 * np.power(fr,2)
+            elif C_B <= 0.65:
+                alpha = 2.6 - 3.7 * fr - 11.6 * np.power(fr,2)
+            elif C_B <= 0.7:
+                alpha = 3.1 - 5.3 * fr - 12.4 * np.power(fr,2)
+            elif C_B <= 0.75:
+                alpha = 2.4 - 10.6 * fr - 9.5 * np.power(fr,2)
+            elif C_B <= 0.8:
+                alpha = 2.6 - 13.1 * fr - 15.1 * np.power(fr,2)
+            elif C_B <= 0.85:
+                alpha = 3.1 - 18.7 * fr + 28 * np.power(fr,2)        
+        else: # ballast condition
+            if C_B <= 0.75:
+                alpha = 2.6 - 12.5 * fr - 13.5 * np.power(fr,2)
+            elif C_B < 0.8:
+                alpha = 3.0 - 16.3 * fr - 21.6 * np.power(fr,2)
+            elif C_B < 0.85:
+                alpha = 3.4 - 20.9 * fr + 31.8 * np.power(fr,2)   
+    #    # ship form coefficient it's different due to ship categories, the value
+    #    # used below is suez-max, other types need more information
+        if not loadCon: # laden or normal
+            # cForm = 0.6*BN + (BN^6.5) / (2.7 * (disp ^ (2 / 3)));
+            # for the euqation above, it comes from the paper of Ruihua LU, 2013,
+            # Low Carbon Shipping Conference, London, Voyeage Optimisation:
+            # Prediction of ship specific fuel consumption for energy efficient
+            # shipping
+            cForm = 0.5 * BN + np.power(BN, 6.5) / (2.7 * np.power(disp, 2.0 / 3.0))
+        else: # ballast condition
+            # cForm = 0.8*BN + (BN^6.5) / (2.7 * (disp ^ (2 / 3)));
+            # for the euqation above, it comes from the paper of Ruihua LU, 2013,
+            # Low Carbon Shipping Conference, London, Voyeage Optimisation:
+            # Prediction of ship specific fuel consumption for energy efficient
+            # shipping
+            cForm = 0.7 * BN + np.power(BN, 6.5) / (2.7 * np.power(disp, 2.0 / 3.0))
+        # if it is a containership, for both laden, normal and ballast condition,
+        # cForm = 0.7*BN + (BN^6.5) / (22 * (disp ^ (2 / 3)));
+        # the percentage of speed loss
+        delt_v_percentage = np.abs(0.01 * cBeta * alpha * cForm)
+        # the reduced speed
+        reduced_v = (1 - delt_v_percentage) * V
+        # [m/s]
+        return reduced_v
                                                
     
     def speed_fit(self, V_gps, heading_ship, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft = 6.8):
@@ -870,7 +1015,4 @@ class Ship_FCM:
         vfit = fitfunc(self.Engine)
        
         return vfit
-
-        
-s = Ship_FCM()
 
