@@ -2,6 +2,7 @@ import numpy as np
 from scipy.integrate import quad, simps
 import scipy.special as scs
 from scipy.interpolate import interp1d
+from scipy import interpolate
 
 """
 This Ship fuel consumption model will include 6 - 7 components: 
@@ -46,6 +47,27 @@ class Ship_FCM:
             self.C_stern = 0
         elif self.aftform == 3:
             self.C_stern = 10
+        # SHIP TYPE [ADDED 2017.1.3]
+        self.shiptype = 5
+        if self.shiptype == 1:
+#            print ('This is a GENERAL CARGO')
+            self.Caa = [0.55, 0.90, 1.0, 1.0, 0.9, 0.87, 0.62, 0.45, 0.25, 0.1, -0.1, -0.48, -0.85, -1.0, -1.42, -1.49, -1.38, -0.9, -0.85]
+        elif self.shiptype == 2:
+#            print ('This is a CONVENTINAL TANKER')
+            self.Caa = [0.90, 0.87, 0.8, 0.7, 0.6, 0.5, 0.35, 0.15, 0.05, -0.05, -0.1, -0.21, -0.25, -0.40, -0.55, -0.60, -0.65, -0.70, -0.67 ]
+        elif self.shiptype == 3:   # not finished yet
+#            print ('This is a Cylindrical bow tanker')
+            self.Caa = [0.55, 0.90, 1.0, 1.0, 0.9, 0.87, 0.62, 0.45, 0.25, 0.1, -0.1, -0.48, -0.85, -1.0, -1.42, -1.49, -1.38, -0.9, -0.85]
+        elif self.shiptype == 4:   # not finished yet
+#            print ('This is a CONTAINER SHIP')
+            self.Caa = [0.55, 0.90, 1.0, 1.0, 0.9, 0.87, 0.62, 0.45, 0.25, 0.1, -0.1, -0.48, -0.85, -1.0, -1.42, -1.49, -1.38, -0.9, -0.85]
+        elif self.shiptype == 5: 
+#            print ('This is a CRUISE FERRY')
+            self.Caa = [0.70, 0.72, 0.74, 0.70, 0.25, 0.20, 0.22, 0.0, -0.23, -0.03, 0.05, 0.05, -0.10, -0.25, -0.55, -0.75, -0.80, -0.75, -0.70]
+        else : # not finished yet
+#            print ('Shiptype == 6: This is a CAR CARRIER')
+            self.Caa = [0.55, 0.90, 1.0, 1.0, 0.9, 0.87, 0.62, 0.45, 0.25, 0.1, -0.1, -0.48, -0.85, -1.0, -1.42, -1.49, -1.38, -0.9, -0.85]
+        
         self.i_E = 12.08  # half angle of entrance [degrees],if i_E is unknown, put it as 0(zero)
         self.A_T = 16.00  # transom area [m2]
         self.A_BT = 20  # transverse bulb area [m2]
@@ -81,12 +103,14 @@ class Ship_FCM:
         self.n = 2.3  # propeller speed [rps]
         self.clearance = 0.30  # clearance of propeller with the keel line [m]
         self.SFOC = 217  # Specific fuel oil consumption [g/kWh]
-        self.Engine = 31200 # Engine power[kw]
-
+#        self.Engine = 31200 # Engine power[kw]
+        self.Engine = 19800 # Engine power[kw]
+        
+        # Wet surface area
         self.S = self.L * (2 * self.T + self.B) * np.sqrt(self.C_M) * (0.453 + 0.4425 * self.C_B + (-0.2862) * self.C_M - 0.003467 * self.B / self.T + 0.3696 * self.C_WP) + 2.38 * self.A_BT / self.C_B
         
         # DYNAMIC INFORMATION
-        self.V = 10  # m/s
+        self.V = 10.289  # m/s
         self.fr = self.V  / np.sqrt(self.g * self.L)
         self.re = self.V * self.L / self.v
 
@@ -326,7 +350,7 @@ class Ship_FCM:
 
     #############################################################################################################
     # 2), added resistance due to wind
-    def R_wind(self, wind_U, wind_V, V_gps, heading_ship,  shiptype):
+    def R_wind(self, wind_U, wind_V, V_gps, heading_ship):
 
         """  
         Function R_wind(wind_U, wind_V, V_gps, heading_ship)
@@ -350,11 +374,6 @@ class Ship_FCM:
         NB: the side drifting force and angle are not considered in the current investigation
 
         """
-        if not shiptype:
-            shiptype = 1
-            print('No input of ship type: By default General cargo!')
-
-
 
         ship_heading = heading_ship
 
@@ -389,19 +408,19 @@ class Ship_FCM:
         # relative wind speed [m/s]
         V_relative =  np.array(appwind_spd)       # relative wind speed along ship course [m/s]
 
-        print 'Apparent wind', heading_ship2wind, V_relative/0.5144
+#        print 'Apparent wind', heading_ship2wind, V_relative/0.5144
 
 
         # ship's transverse projection area including superstrucures [m^2]
         A_transverse = 1500       
 
-        R_wind = 0.001 * 0.5 * ro_air * self.C_AA (heading_ship2wind, shiptype) * A_transverse * np.power(V_relative, 2) \
+        R_wind = 0.001 * 0.5 * ro_air * self.C_AA (heading_ship2wind) * A_transverse * np.power(V_relative, 2) \
                 #- 0.001 * 0.5 * ro_air * self.C_AA (0, shiptype) *  A_transverse * np.power(V_ship, 2)
 
         return R_wind
 
     # 2.1) get the wind resistance coefficiency
-    def C_AA(self, heading_ship2wind, shiptype):
+    def C_AA(self, heading_ship2wind):
         """
         Function C_AA(heading_ship2wind)
         
@@ -416,38 +435,18 @@ class Ship_FCM:
         Output: C_AA is the wind force coefficiency according to Test from ISO15016 for different ship types
 
         """
-        from scipy import interpolate
+        
 
         Heading = np.arange(0, 185, 10)
 
-        if not shiptype:
-            shiptype = 1
-            print('No input of ship type: By default General cargo!')
 
-        if shiptype == 1:
-            print ('This is a GENERAL CARGO')
-            Caa = [0.55, 0.90, 1.0, 1.0, 0.9, 0.87, 0.62, 0.45, 0.25, 0.1, -0.1, -0.48, -0.85, -1.0, -1.42, -1.49, -1.38, -0.9, -0.85]
-        elif shiptype == 2:
-            print ('This is a CONVENTINAL TANKER')
-            Caa = [0.90, 0.87, 0.8, 0.7, 0.6, 0.5, 0.35, 0.15, 0.05, -0.05, -0.1, -0.21, -0.25, -0.40, -0.55, -0.60, -0.65, -0.70, -0.67 ]
-        elif shiptype == 3:   # not finished yet
-            print ('This is a Cylindrical bow tanker')
-            Caa = [0.55, 0.90, 1.0, 1.0, 0.9, 0.87, 0.62, 0.45, 0.25, 0.1, -0.1, -0.48, -0.85, -1.0, -1.42, -1.49, -1.38, -0.9, -0.85]
-        elif shiptype == 4:   # not finished yet
-            print ('This is a CONTAINER SHIP')
-            Caa = [0.55, 0.90, 1.0, 1.0, 0.9, 0.87, 0.62, 0.45, 0.25, 0.1, -0.1, -0.48, -0.85, -1.0, -1.42, -1.49, -1.38, -0.9, -0.85]
-        elif shiptype == 5: 
-            print ('This is a CRUISE FERRY')
-            Caa = [0.70, 0.72, 0.74, 0.70, 0.25, 0.20, 0.22, 0.0, -0.23, -0.03, 0.05, 0.05, -0.10, -0.25, -0.55, -0.75, -0.80, -0.75, -0.70]
-        else : # not finished yet
-            print ('Shiptype == 6: This is a CAR CARRIER')
-            Caa = [0.55, 0.90, 1.0, 1.0, 0.9, 0.87, 0.62, 0.45, 0.25, 0.1, -0.1, -0.48, -0.85, -1.0, -1.42, -1.49, -1.38, -0.9, -0.85]
+
 
         heading_ship2wind = np.array(heading_ship2wind)
         heading_ship2wind[heading_ship2wind < 0.0001] = 0.0001
         heading_ship2wind[heading_ship2wind > 180] = 360 - heading_ship2wind[heading_ship2wind > 180]
 
-        f_caa = interpolate.interp1d(Heading, Caa)
+        f_caa = interpolate.interp1d(Heading, self.Caa)
         C_AA = f_caa(heading_ship2wind)
 
         return C_AA
@@ -814,8 +813,12 @@ class Ship_FCM:
 
 
         R_calm    = self.R_calmwater(V_water, draft = 6.8)
-        R_wind    = self.R_wind(wind_U, wind_V, V_gps, heading_ship, shiptype)
-        R_wave    = self.R_wave(Hs, Tp, heading_wave, V_water, heading_ship)
+        R_wind    = self.R_wind(wind_U, wind_V, V_gps, heading_ship)
+        if (Hs < 0.01) or (Tp < 0.01) :
+            R_wave = np.zeros(heading_ship.size)
+        else:
+            R_wave = self.R_wave(Hs, Tp, heading_wave, V_water, heading_ship)
+
 #        print R_calm
 #        print R_wave
 #        print R_wind
@@ -847,7 +850,7 @@ class Ship_FCM:
 #        else:
 #            pS_res = -1375.8 * np.power(V_gps, 0.6) + 1034.7 * np.power(wind_U, 1.0) - 403.21 * np.power(wind_V, 1.0) \
 #             + 1375.8 * np.power(heading_ship/180*np.pi, 1.5) - -9917.1 * np.power(Hs, 2.3) + 123.66 * np.power(Tp, 3.0)
-        pS = pS_cal
+        pS = pS_cal* 1.35
 
         Fuel_kg_per_hour = pS * self.SFOC * 1e-3 
 
@@ -1007,12 +1010,28 @@ class Ship_FCM:
         '''
         find ship speed in certain engine power
         '''
-        V = np.linspace(0.1 * V_gps, 1.1 * V_gps, 20)
+        V = np.linspace(0.3 * V_gps, 1.1 * V_gps, 10)
         PS = np.array(self.weather2fuel(V, heading_ship, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft))[1]
 
 
         fitfunc = interp1d(PS, V, kind = 'cubic')
         vfit = fitfunc(self.Engine)
        
+        return vfit
+    
+    def power_to_speed(self, V_gps, heading_ship, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft = 6.8):
+        if isinstance(heading_ship, float):
+            V = np.linspace(0.3 * V_gps, 1.1 * V_gps, 10)
+            PS = np.array(self.weather2fuel(V, heading_ship, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft))[1]
+            fitfunc = interp1d(PS, V, kind = 'cubic')
+            vfit = fitfunc(self.Engine)
+        else:
+            vfit = []
+            V = np.linspace(0.3 * V_gps, 1.1 * V_gps, 10)
+            for heading in heading_ship:
+                Ps = np.array(self.weather2fuel(V, heading, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft))[1]
+                fitfunc = interp1d(Ps, V, kind = 'cubic')
+                vfit.append(fitfunc(self.Engine))
+            vfit = np.array(vfit).ravel()
         return vfit
 
