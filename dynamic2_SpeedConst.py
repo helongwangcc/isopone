@@ -2,7 +2,7 @@ import numpy as np
 from GeneralFunction import *
 from Ship_FCM import *
 import heapq
-#from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt
 
 # BATHYMETRIC CLASS
 bathymetry = Bathymetry("GEBCO_2014_2D_-75.0_30.0_10.0_55.0.nc")
@@ -20,7 +20,8 @@ class dy2_node:
         self.lati = lati
         self.stage = np.int(stage)
         self.num = num
-        self.spath = []   
+        self.spath = [] 
+        self.speed = 20.0
         self.time = 0.0
         self.fuelc = 0.0
         self.PE = 0.0
@@ -78,8 +79,15 @@ def TwoDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initial_
         else:
             nodes.spath = nodeset[1][0]
             nodes_dist, nodes_bearing = greatcircle_inverse(nodeset[1][0].longi, nodeset[1][0].lati, nodes.longi, nodes.lati)
-            nodes.time = nodes_dist / v / 1.852 + nodeset[1][0].time
             nodes_fuelc = ship_info.weather2fuel(v, nodes_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)
+             # CHECK WHETHER POWER EXCEED [ADDED 2017.1.3]
+            if nodes_fuelc[1] > ship_info.Engine:
+                vfit = ship_info.speed_fit(v, nodes_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)
+                nodes_fuelc = ship_info.weather2fuel(vfit, nodes_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)
+            else:
+                vfit = v
+            nodes.time = nodes_dist / vfit / 1.852 + nodeset[1][0].time
+            nodes.speed = vfit
             nodes.PE = nodes_fuelc[0]
             nodes.PS = nodes_fuelc[1]
             nodes.fuel_kg_per_hour = nodes_fuelc[2]
@@ -115,11 +123,16 @@ def TwoDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initial_
                     i_cv = weather_info.cv([subset.lati, subset.longi, subset.time])
                     sub_dist, sub_bearing = greatcircle_inverse(subset.longi, subset.lati, nodes.longi, nodes.lati)
                     #
-                    timec = sub_dist / v / 1.852 + subset.time
                     sub_fuelc = ship_info.weather2fuel(v, sub_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)
+                    if sub_fuelc[1] > ship_info.Engine:
+                        vfit = ship_info.speed_fit(v, sub_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)
+                        sub_fuelc = ship_info.weather2fuel(vfit, sub_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)
+                    else:
+                        vfit = v
+                    timec = sub_dist / vfit / 1.852 + subset.time                    
                     fuelc = sub_fuelc[3] * sub_dist / 1.852 + subset.fuelc
-                    heapq.heappush(h,[fuelc, timec, sub_fuelc[0], sub_fuelc[1], sub_fuelc[2], sub_fuelc[3], subset])
-                nodes.fuelc, nodes.time, nodes.PE, nodes.PS, nodes.fuel_kg_per_hour, nodes.fuel_kg_per_nm, nodes.spath = heapq.heappop(h)
+                    heapq.heappush(h,[fuelc, vfit, timec, sub_fuelc[0], sub_fuelc[1], sub_fuelc[2], sub_fuelc[3], subset])
+                nodes.fuelc, nodes.speed, nodes.time, nodes.PE, nodes.PS, nodes.fuel_kg_per_hour, nodes.fuel_kg_per_nm, nodes.spath = heapq.heappop(h)
                 
    
     return nodeset
@@ -129,9 +142,9 @@ def construct_dypath2(dy_set):
     p = dy_set[K][0]
     path_info = []
     while p.spath != []:
-        path_info.append([p.time, p.longi, p.lati, p.fuelc, p.PE, p.PS, p.fuel_kg_per_hour, p.fuel_kg_per_nm])
+        path_info.append([p.time, p.speed, p.longi, p.lati, p.fuelc, p.PE, p.PS, p.fuel_kg_per_hour, p.fuel_kg_per_nm])
         p = p.spath
-    path_info.append([p.time, p.longi, p.lati, p.fuelc, p.PE, p.PS, p.fuel_kg_per_hour, p.fuel_kg_per_nm])
+    path_info.append([p.time, p.speed, p.longi, p.lati, p.fuelc, p.PE, p.PS, p.fuel_kg_per_hour, p.fuel_kg_per_nm])
     path_info = path_info[::-1]
     
     return np.array(path_info)
@@ -156,16 +169,16 @@ p_des = np.array([-73.0, 40.0])
 dy2_set2 = TwoDDP(p_dep, p_des, 20, 6, 31, 0.2, 3, dy2timec, dy2fuelc)
 dy2_path2 = construct_dypath2(dy2_set2)
 
-#m = Basemap(
-#  projection="merc",
-#  resolution='l',
-#  area_thresh=0.1,
-#  llcrnrlon=-75,
-#  llcrnrlat=35,
-#  urcrnrlon=10,
-#  urcrnrlat=55
-#)
-#
+m = Basemap(
+  projection="merc",
+  resolution='l',
+  area_thresh=0.1,
+  llcrnrlon=-75,
+  llcrnrlat=35,
+  urcrnrlon=10,
+  urcrnrlat=55
+)
+
 #longi = []
 #lati = []
 #for i in dy2_set1.keys():
@@ -187,16 +200,16 @@ dy2_path2 = construct_dypath2(dy2_set2)
 #m.drawparallels(np.arange(-90.,120.,5.), labels=[1,0,0,0], fontsize=15)
 #m.drawmeridians(np.arange(-180.,180.,5.), labels=[0,0,0,1], fontsize=15)
 #plt.show()  
-#plt.figure(figsize=(20, 15))
+plt.figure(figsize=(20, 15))
 #x, y = m(dy2_path1[:,1], dy2_path1[:,2])
 #m.plot(x, y, marker=None, linewidth=3, color='g')
 #m.scatter(x, y, marker='D',color='g')
-#
-#x, y = m(dy2_path2[:,1], dy2_path2[:,2])
-#m.plot(x, y, marker=None, linewidth=3, color='g')
-#m.scatter(x, y, marker='D',color='g')
-#m.drawparallels(np.arange(-90.,120.,5.), labels=[1,0,0,0], fontsize=15)
-#m.drawmeridians(np.arange(-180.,180.,5.), labels=[0,0,0,1], fontsize=15)
-#m.drawcoastlines()
-#m.fillcontinents()
-#plt.show()
+
+x, y = m(dy2_path2[:,2], dy2_path2[:,3])
+m.plot(x, y, marker=None, linewidth=3, color='g')
+m.scatter(x, y, marker='D',color='g')
+m.drawparallels(np.arange(-90.,120.,5.), labels=[1,0,0,0], fontsize=15)
+m.drawmeridians(np.arange(-180.,180.,5.), labels=[0,0,0,1], fontsize=15)
+m.drawcoastlines()
+m.fillcontinents()
+plt.show()

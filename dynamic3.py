@@ -19,6 +19,7 @@ class dy3_node:
         self.lati = lati
         self.stage = np.int(stage)
         self.num = num
+        self.state = []
         self.dtime = []
         self.spath = []   
         self.speed = []
@@ -58,12 +59,18 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
         # node number starts at 0
         nodeset[i + 1] = np.array([dy3_node(tempnode[0], tempnode[1], i + 1, nodes) for nodes, tempnode in enumerate(temp_pos)])
     nodeset[K] = np.array([dy3_node(longi_c[-1], lati_c[-1], K, (n - 1) / 2)])
-    #
-    vn = np.linspace(0.6 * v, v, 20)
+    
+    
+    # DEFINE AVAILABLE SPEED
+    vn = np.linspace(0.7 * v, 1.1 * v, 20)
+    
+    # INITIALIZE FIRST STAGE    
     nodeset[1][0].time = Initial_time
     nodeset[1][0].dtime = Initial_time
     nodeset[1][0].fuelc = Initial_fuelc
     nodeset[1][0].speed = v
+    
+    # INITIALIZE SECOND STAGE    
     i_depth = bathymetry.water_depth([nodeset[1][0].longi, nodeset[1][0].lati])
     i_wind_U = weather_info.u([nodeset[1][0].lati, nodeset[1][0].longi, nodeset[1][0].time]) / 0.51444
     i_wind_V = weather_info.v([nodeset[1][0].lati, nodeset[1][0].longi, nodeset[1][0].time]) / 0.51444
@@ -78,18 +85,32 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
         else:
             nodes.spath.append(nodeset[1][0])
             nodes_dist, nodes_bearing = greatcircle_inverse(nodeset[1][0].longi, nodeset[1][0].lati, nodes.longi, nodes.lati)
-            temp_timec = nodes_dist / vn / 1.852 + nodeset[1][0].dtime
-            temp_fuelc = np.array(ship_info.weather2fuel(vn, nodes_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head))
+            temp_speed = vn
+            # FUEL CONSUMPTION FOR ALL SETTING SPEED
+            temp_fuelc = np.array(ship_info.weather2fuel(temp_speed, nodes_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head))
+            #  
+            check_index = np.argwhere(temp_fuelc[:,1] <= ship_info.Engine).ravel()
+            if check_index.size == 0:
+                print "Engine Power exceeded!"
+                continue
+            temp_speed = temp_speed[check_index]
+            temp_fuelc = np.array(ship_info.weather2fuel(temp_speed, nodes_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head))
+            
+            # ARRIVAL TIME ****************** SAME LENGTH WITH SPEED    
+            temp_timec = nodes_dist / temp_speed / 1.852 + nodeset[1][0].dtime    
+            # DEFINE TIME SECTOR FOR SELLECTING STATES
             time_sec = np.linspace(max(temp_timec), min(temp_timec) - min(temp_timec) * rand() / 100, 21)
             temp_ind = []
+            # PICK UP HALF OF POINTS WHICH ARE FAST
             for num in range(10, 20):
                 ind = np.argwhere((temp_timec <= time_sec[num]) & (temp_timec >= time_sec[num + 1]))
                 if ind.size == 0:
                     continue
                 else:
-                    temp_ind.append(np.argwhere(temp_fuelc[3] == min(temp_fuelc[3][ind])))
+                    temp_ind.append(np.argwhere(temp_fuelc[3] == min(temp_fuelc[3][ind])))                    
             temp_ind = np.array(temp_ind)
-            nodes.speed = vn[temp_ind].ravel()
+            nodes.speed = temp_speed[temp_ind].ravel()
+            nodes.state = range(nodes.speed.size)
             nodes.dtime = nodeset[1][0].dtime
             nodes.time = temp_timec[temp_ind].ravel()
             nodes.PE = temp_fuelc[0][temp_ind].ravel()
@@ -98,7 +119,9 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
             nodes.fuel_kg_per_nm = temp_fuelc[3][temp_ind].ravel()
             nodes.fuelc = temp_fuelc[3][temp_ind].ravel() * nodes_dist / 1.852 + Initial_fuelc
             
+    # OTHER STAGES        
     for i in range(2, K):
+        # FROM STAGE 3
         for countnum, nodes in enumerate(nodeset[i + 1]):
             if nodes.num - q < 0:
                 temp_subset = [subset for subset in nodeset[i][:q + nodes.num + 1]]
@@ -115,6 +138,7 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
             else:
                 timec = []
                 timed = []
+                state = []
                 fuelc = []
                 speedc = []
                 pathc = []
@@ -133,10 +157,22 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
                         i_cu = weather_info.cu([subset.lati, subset.longi, subset.time[num]])
                         i_cv = weather_info.cv([subset.lati, subset.longi, subset.time[num]])
                         sub_dist, sub_bearing = greatcircle_inverse(subset.longi, subset.lati, nodes.longi, nodes.lati)
+                        
+                        temp_speed = vn                        
                         sub_fuelc = np.array(ship_info.weather2fuel(vn, sub_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head))
-                        pathc.append([[subset] for setnum in range(len(vn))])
-                        speedc.append(vn)
-                        timec.append(sub_dist / vn / 1.852 + subset.time[num])
+                        check_index = np.argwhere(sub_fuelc[:,1] <= ship_info.Engine).ravel()                        
+                        if check_index.size == 0:
+                            continue
+                        temp_speed = temp_speed[check_index]
+                        sub_fuelc = np.array(ship_info.weather2fuel(temp_speed, nodes_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head))
+                        
+                        
+                        pathc.append([[subset] for setnum in range(len(temp_speed))])
+                        speedc.append(temp_speed)
+                        
+                        state.append(subset.state[num])
+                        
+                        timec.append(sub_dist / temp_speed / 1.852 + subset.time[num])
                         timed.append([subset.time[num] for setnum in range(len(vn))])
                         PE.append(sub_fuelc[0])
                         PS.append(sub_fuelc[1])
@@ -145,6 +181,9 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
                         fuelc.append(sub_fuelc[3] * sub_dist / 1.852 + subset.fuelc[num])
                 pathc = np.array(pathc).ravel()
                 timec = np.array(timec).ravel()
+                
+                state = np.array(state).ravel()
+                
                 timed = np.array(timed).ravel()
                 speedc = np.array(speedc).ravel()
                 PE = np.array(PE).ravel()

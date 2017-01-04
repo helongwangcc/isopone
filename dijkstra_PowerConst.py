@@ -113,11 +113,12 @@ class DijkstraGrid:
         i_cu = weather_info.cu([ps.lati, ps.longi, time])
         i_cv = weather_info.cv([ps.lati, ps.longi, time])
         dist, bearing = greatcircle_inverse(ps.longi, ps.lati, pe.longi, pe.lati)
-        timec = dist / v / 1.852
-        fuel_cost = ship_info.weather2fuel(v, bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)
+        vfit = ship_info.power_to_speed(v, bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)
+        timec = dist / vfit / 1.852
+        fuel_cost = ship_info.weather2fuel(vfit, bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)
         fuelc = fuel_cost[3] * dist / 1.852
         
-        return np.array([np.float(fuelc), timec]).ravel(), np.array(fuel_cost).ravel().tolist()
+        return np.array([np.float(fuelc), timec]).ravel(), np.array(fuel_cost + [vfit]).ravel().tolist()
 
 class PriorityQueue:
     def __init__(self):
@@ -134,11 +135,11 @@ class PriorityQueue:
 
 def dijkstra(graph, container, start, goal, v, q, Initial_time, Initial_fuelc):
     frontier = PriorityQueue()
-    frontier.put(start, np.array([Initial_fuelc, Initial_time, 0, 0, 0, 0]))
+    frontier.put(start, np.array([Initial_fuelc, Initial_time, 0, 0, 0, 0, v]))
     came_from = {}
     cost_so_far = {}
     came_from[start] = None
-    cost_so_far[start] = [Initial_fuelc, Initial_time, 0, 0, 0, 0]
+    cost_so_far[start] = [Initial_fuelc, Initial_time, 0, 0, 0, 0, v]
     
     while not frontier.empty():
         current = frontier.get()
@@ -170,7 +171,7 @@ def construct_dijpath(goal, start, came_from, cost_so_far, container):
     for subpath in path:
         child = container[subpath[0]][subpath[1]]
         child_info = cost_so_far[subpath]
-        path_info.append([child_info[1], child.longi, child.lati, child_info[0], child_info[2], child_info[3], child_info[4] ,child_info[5]])
+        path_info.append([child_info[1], child.longi, child.lati, child_info[0], child_info[2], child_info[3], child_info[4] ,child_info[5], child_info[6]])
     
     return np.array(path_info)
 
@@ -199,25 +200,25 @@ DijkGrid2 = DijkstraGrid(GraphWidth, GraphHeight)
 Dcf2, Dcsf2 = dijkstra(DijkGrid2, DijkGraph2, (0, 0), (GraphWidth - 1, 0), 20, 5, 0, 0)
 Dij_path2 = construct_dijpath((GraphWidth - 1, 0),(0, 0), Dcf2, Dcsf2, DijkGraph2)
 
-#m = Basemap(
-#  projection="merc",
-#  resolution='l',
-#  area_thresh=0.1,
-#  llcrnrlon=-75,
-#  llcrnrlat=35,
-#  urcrnrlon=10,
-#  urcrnrlat=55
-#)
-#plt.figure(figsize=(20, 15))
+m = Basemap(
+  projection="merc",
+  resolution='l',
+  area_thresh=0.1,
+  llcrnrlon=-75,
+  llcrnrlat=35,
+  urcrnrlon=10,
+  urcrnrlat=55
+)
+plt.figure(figsize=(20, 15))
 #x, y = m(Dij_path1[:,1], Dij_path1[:,2])
 #m.plot(x, y, marker=None, linewidth=3, color='g')
 #m.scatter(x, y, marker='D',color='g')
-#
-#x, y = m(Dij_path2[:,1], Dij_path2[:,2])
-#m.plot(x, y, marker=None, linewidth=3, color='g')
-#m.scatter(x, y, marker='D',color='g')
-#m.drawparallels(np.arange(-90.,120.,5.), labels=[1,0,0,0], fontsize=15)
-#m.drawmeridians(np.arange(-180.,180.,5.), labels=[0,0,0,1], fontsize=15)
-#m.drawcoastlines()
-#m.fillcontinents()
-#plt.show()
+
+x, y = m(Dij_path2[:,1], Dij_path2[:,2])
+m.plot(x, y, marker=None, linewidth=3, color='g')
+m.scatter(x, y, marker='D',color='g')
+m.drawparallels(np.arange(-90.,120.,5.), labels=[1,0,0,0], fontsize=15)
+m.drawmeridians(np.arange(-180.,180.,5.), labels=[0,0,0,1], fontsize=15)
+m.drawcoastlines()
+m.fillcontinents()
+plt.show()

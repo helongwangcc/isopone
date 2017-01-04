@@ -22,6 +22,7 @@ class isop_node(object):
         self.longi = longi
         self.lati = lati
         self.bearing = bearing
+        self.speed = 20.0
         self.time = 0.0
         self.PE = 0.0
         self.PS = 0.0
@@ -65,6 +66,17 @@ def isopone(departure, destination, delta_c, m, Vs, fuel_constraint, delta_d, k,
     child_speed = Vs
     # OUTPUT: [pE, pS, Fuel_kg_per_hour, Fuel_kg_per_nm]
     child_fuelc = np.array(ship_info.weather2fuel(child_speed, current_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)).T
+    # CHECK WHETHER POWER EXCEED [ADDED 2017.1.3]
+    check_index = np.argwhere(child_fuelc[:,1] > ship_info.Engine).ravel() 
+    #  RECALCULATE FUEL CONSUMPTION
+    if check_index.size == 0:
+        pass
+    else:
+        child_speed = np.ones(current_bearing.size) * Vs
+        for indc in check_index:
+            indc = int(indc)
+            child_speed[indc] = ship_info.speed_fit(child_speed[indc], current_bearing[indc], i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)
+            child_fuelc[indc] = np.array(ship_info.weather2fuel(child_speed[indc], current_bearing[indc], i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)).ravel() 
     # TIME CONSUMING FOR EACH HEADING
     child_time = fuel_limit / child_fuelc[:,2]
     # POSITION OF EACH POINT
@@ -79,6 +91,7 @@ def isopone(departure, destination, delta_c, m, Vs, fuel_constraint, delta_d, k,
     for child_num, child_set in enumerate(node_dict[1]):
         child_set.parent = startpoint
         child_set.time = child_time[child_landmasks][child_num] + startpoint.time
+        child_set.speed = child_speed[child_landmasks][child_num]
         child_set.PE = child_fuelc[child_landmasks][:,0][child_num]
         child_set.PS = child_fuelc[child_landmasks][:,1][child_num]
         child_set.fuel_kg_per_hour = child_fuelc[child_landmasks][:,2][child_num]
@@ -113,6 +126,18 @@ def isopone(departure, destination, delta_c, m, Vs, fuel_constraint, delta_d, k,
                 current_bearing = np.linspace(child_node.bearing - delta_c * m, child_node.bearing + delta_c * m, 2 * m + 1)
                 child_speed = Vs
                 child_fuelc = np.array(ship_info.weather2fuel(child_speed, current_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)).T
+                # CHECK WHETHER POWER EXCEED [ADDED 2017.1.3]
+                check_index = np.argwhere(child_fuelc[:,1] > ship_info.Engine).ravel()
+                # RECALCULATE FUEL CONSUMPTION
+                if check_index.size == 0:
+                    pass
+                else:
+                    child_speed = np.ones(current_bearing.size) * Vs
+                    for indc in check_index:
+                        indc = int(indc)
+                        child_speed[indc] = ship_info.speed_fit(child_speed[indc], current_bearing[indc], i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)
+                        child_fuelc[indc] = np.array(ship_info.weather2fuel(child_speed[indc], current_bearing[indc], i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)).ravel()
+                # TRAVELLED DISTANCE                    
                 child_timez = fuel_limit / child_fuelc[:,2]
                 # child_node: NODES IN PARENTS LIST
                 child_points = greatcircle_point(child_node.longi, child_node.lati, child_speed * child_timez * 1.852, current_bearing).T
@@ -125,10 +150,13 @@ def isopone(departure, destination, delta_c, m, Vs, fuel_constraint, delta_d, k,
                 child_ind2 = greatcircle_inverse(destination[0], destination[1], child_points[:, 0], child_points[:,1])[0]
                 child_index = np.column_stack((child_ind2, child_ind1))
                 # [node number, distance, bearing, time, longi, lati, bearing, pE, pS, Fuel_kg_per_hour, Fuel_kg_per_nm]
-                child_list = np.column_stack((np.ones(2 * m + 1) * num_node, child_index, child_timez, child_points, child_fuelc))
+                if check_index.size == 0:
+                    child_list = np.column_stack((np.ones(2 * m + 1) * num_node, child_index, child_timez, child_points, child_fuelc, child_speed * np.ones(current_bearing.size)))
+                else:
+                    child_list = np.column_stack((np.ones(2 * m + 1) * num_node, child_index, child_timez, child_points, child_fuelc, child_speed))
                 children_list.append(child_list)
             children_list = np.array(children_list)
-            children_list = children_list.reshape(children_list.size / 11, 11)
+            children_list = children_list.reshape(children_list.size / 12, 12)
             children_list = children_list[(children_list[:,2] >= min(sub_secs)) & (children_list[:,2] <= max(sub_secs))]
                                     
             child_container = []
@@ -149,6 +177,7 @@ def isopone(departure, destination, delta_c, m, Vs, fuel_constraint, delta_d, k,
                 num = int(num)
                 temp[num].parent = parent_set[int(child_container[num][0])]
                 temp[num].time = child_container[num][3] + temp[num].parent.time
+                temp[num].speed = child_container[num][11]
                 temp[num].PE = child_container[num][7]
                 temp[num].PS = child_container[num][8]
                 temp[num].fuel_kg_per_hour = child_container[num][9]
@@ -167,6 +196,7 @@ def isopone(departure, destination, delta_c, m, Vs, fuel_constraint, delta_d, k,
     # DEFINE DESTINATION POINT
     dest = isop_node(destination[0], destination[1], 0)
     dest.time = []
+    dest.speed = []
     dest.PE = []
     dest.PS = []
     dest.fuel_kg_per_hour =[]
@@ -191,11 +221,18 @@ def isopone(departure, destination, delta_c, m, Vs, fuel_constraint, delta_d, k,
         i_cv = weather_info.cv([child.lati, child.longi, child.time])
         # CONSTANT SPEED
         child_speed = Vs
-        # TOTAL TIME CONSUMPTION
-        child_time = current_distance / child_speed / 1.852 + child.time
         # FUEL RELATED
         child_fuelc = ship_info.weather2fuel(child_speed, current_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)
+        if child_fuelc[1] <= ship_info.Engine:
+            pass
+        else:
+            child_speed = ship_info.speed_fit(child_speed, current_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)
+            child_fuelc = np.array(ship_info.weather2fuel(child_speed, current_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)).ravel()
+        # TOTAL TIME CONSUMPTION
+        child_time = current_distance / child_speed / 1.852 + child.time
+
         dest.time.append(child_time)
+        dest.speed.append(child_speed)
         dest.PE.append(child_fuelc[0])
         dest.PS.append(child_fuelc[1])
         dest.fuel_kg_per_hour.append(child_fuelc[2])
@@ -228,11 +265,11 @@ def construct_isop_path(isop_set):
         tempset = []
         tempnode = nodes
         while tempnode.parent != None:
-            tempset.append([tempnode.time, tempnode.longi, tempnode.lati, tempnode.fuelc, tempnode.PE, tempnode.PS, tempnode.fuel_kg_per_hour, tempnode.fuel_kg_per_nm])
+            tempset.append([tempnode.time, tempnode.longi, tempnode.lati, tempnode.fuelc, tempnode.PE, tempnode.PS, tempnode.fuel_kg_per_hour, tempnode.fuel_kg_per_nm, tempnode.speed])
             tempnode = tempnode.parent
-        tempset.append([tempnode.time, tempnode.longi, tempnode.lati, tempnode.fuelc, tempnode.PE, tempnode.PS, tempnode.fuel_kg_per_hour, tempnode.fuel_kg_per_nm])
+        tempset.append([tempnode.time, tempnode.longi, tempnode.lati, tempnode.fuelc, tempnode.PE, tempnode.PS, tempnode.fuel_kg_per_hour, tempnode.fuel_kg_per_nm, tempnode.speed])
         tempset = tempset[::-1]
-        tempset.append([p.time[num], p.longi, p.lati, p.fuelc[num], p.PE[num], p.PS[num], p.fuel_kg_per_hour[num], p.fuel_kg_per_nm[num]])
+        tempset.append([p.time[num], p.longi, p.lati, p.fuelc[num], p.PE[num], p.PS[num], p.fuel_kg_per_hour[num], p.fuel_kg_per_nm[num], p.speed[num]])
         path_info.append(tempset)
     return np.array(path_info)
     
