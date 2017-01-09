@@ -116,7 +116,7 @@ class DijkstraGrid:
         fuel_cost = ship_info.weather2fuel(v, bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)        
         if fuel_cost[1] > ship_info.Engine:
             vfit = ship_info.speed_fit(v, bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)
-            fuel_cost = ship_info.weather2fuel(v, bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)        
+            fuel_cost = ship_info.weather2fuel(vfit, bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)        
         else:
             vfit = v            
         timec = dist / vfit / 1.852
@@ -180,20 +180,21 @@ def construct_dijpath(goal, start, came_from, cost_so_far, container):
         path_info.append([child_info[1], child.longi, child.lati, child_info[0], child_info[2], child_info[3], child_info[4] ,child_info[5], child_info[6]])
     
     return np.array(path_info)
+    
 
-## departure
-#p_dep = np.array([3.9, 52.0])
-## destination
-#p_des = np.array([-5.0, 49.0])
-## # construct route 1
-#DijkGraph1 = gen_graph(p_dep, p_des, 20, 1, 25, 0.07)
-#GraphWidth = len(DijkGraph1)
-#GraphHeight = max([len(dijkgraph) for dijkgraph in DijkGraph1])
-#DijkGrid1 = DijkstraGrid(GraphWidth, GraphHeight)
-#Dcf1, Dcsf1 = dijkstra(DijkGrid1, DijkGraph1, (0, 0), (GraphWidth - 1, 0), 20, 5, 0, 0)
-#Dij_path1 = construct_dijpath((GraphWidth - 1, 0),(0, 0), Dcf1, Dcsf1, DijkGraph1)
-#dij_timec = Dij_path1[-1,0]
-#dij_fuelc = Dij_path1[-1,3]
+# departure
+p_dep = np.array([3.9, 52.0])
+# destination
+p_des = np.array([-5.0, 49.0])
+# # construct route 1
+DijkGraph1 = gen_graph(p_dep, p_des, 20, 1, 25, 0.07)
+GraphWidth = len(DijkGraph1)
+GraphHeight = max([len(dijkgraph) for dijkgraph in DijkGraph1])
+DijkGrid1 = DijkstraGrid(GraphWidth, GraphHeight)
+Dcf1, Dcsf1 = dijkstra(DijkGrid1, DijkGraph1, (0, 0), (GraphWidth - 1, 0), 20, 5, 0, 0)
+Dij_path1 = construct_dijpath((GraphWidth - 1, 0),(0, 0), Dcf1, Dcsf1, DijkGraph1)
+dij_timec = Dij_path1[-1,0]
+dij_fuelc = Dij_path1[-1,3]
 # departure
 p_dep = np.array([-5.0, 49.0])
 # destination
@@ -203,28 +204,5 @@ DijkGraph2 = gen_graph(p_dep, p_des, 20, 6, 25, 0.1)
 GraphWidth = len(DijkGraph2)
 GraphHeight = max([len(dijkgraph) for dijkgraph in DijkGraph2])
 DijkGrid2 = DijkstraGrid(GraphWidth, GraphHeight)
-Dcf2, Dcsf2 = dijkstra(DijkGrid2, DijkGraph2, (0, 0), (GraphWidth - 1, 0), 20, 5, 0, 0)
+Dcf2, Dcsf2 = dijkstra(DijkGrid2, DijkGraph2, (0, 0), (GraphWidth - 1, 0), 20, 5, dij_timec, dij_fuelc)
 Dij_path2 = construct_dijpath((GraphWidth - 1, 0),(0, 0), Dcf2, Dcsf2, DijkGraph2)
-
-m = Basemap(
-  projection="merc",
-  resolution='l',
-  area_thresh=0.1,
-  llcrnrlon=-75,
-  llcrnrlat=35,
-  urcrnrlon=10,
-  urcrnrlat=55
-)
-plt.figure(figsize=(20, 15))
-#x, y = m(Dij_path1[:,1], Dij_path1[:,2])
-#m.plot(x, y, marker=None, linewidth=3, color='g')
-#m.scatter(x, y, marker='D',color='g')
-
-x, y = m(Dij_path2[:,1], Dij_path2[:,2])
-m.plot(x, y, marker=None, linewidth=3, color='g')
-m.scatter(x, y, marker='D',color='g')
-m.drawparallels(np.arange(-90.,120.,5.), labels=[1,0,0,0], fontsize=15)
-m.drawmeridians(np.arange(-180.,180.,5.), labels=[0,0,0,1], fontsize=15)
-m.drawcoastlines()
-m.fillcontinents()
-plt.show()

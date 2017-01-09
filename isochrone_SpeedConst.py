@@ -9,13 +9,13 @@ import matplotlib.pyplot as plt
 
       
         
-bathymetry = Bathymetry("GEBCO_2014_2D_9.5_54.0_12.5_60.0.nc")
-#bathymetry = Bathymetry("GEBCO_2014_2D_-75.0_30.0_10.0_55.0.nc")
+#bathymetry = Bathymetry("GEBCO_2014_2D_9.5_54.0_12.5_60.0.nc")
+bathymetry = Bathymetry("GEBCO_2014_2D_-75.0_30.0_10.0_55.0.nc")
 # WATER DEPTH LIMITATION (m)
 DEPTH_LIMIT = -11
 # INITIATE WEATHER CLASS
-weather_info = WeatherInfo("Metdata_OsloKiel_2015-11-21-2015-11-27.mat")
-#weather_info = WeatherInfo("Metdata_NorthAtlantic_2015-01-01-2015-01-31.mat")
+#weather_info = WeatherInfo("Metdata_OsloKiel_2015-11-21-2015-11-27.mat")
+weather_info = WeatherInfo("Metdata_NorthAtlantic_2015-01-01-2015-01-31.mat")
 # INITIATE SHIP INFORMATION
 ship_info = Ship_FCM()
 
@@ -185,9 +185,10 @@ def isochrone(departure, destination, delta_c, m, Vs, delta_t, delta_d, k, Initi
                 temp[num].fuelc = child_container[num][8] * delta_t + temp[num].parent.fuelc
             temp = np.array(temp)
             node_dict[snum] = temp
-            child_container = np.array(child_container)
+            child_container = np.array(child_container)            
             rest_dist = greatcircle_inverse(destination[0], destination[1], child_container[:,3], child_container[:,4])[0]
-            if np.mean(rest_dist) < delta_t * Vs * 1.852:
+            print rest_dist
+            if np.min(rest_dist) < delta_t * Vs * 1.852:
                 break
             else:
                 snum = snum + 1
@@ -259,26 +260,32 @@ def construct_isopath(iso_set):
         tempset.append([p.time[num], p.longi, p.lati, p.fuelc[num], p.PE[num], p.PS[num], p.fuel_kg_per_hour[num], p.fuel_kg_per_nm[num], p.speed[num]])
         path_info.append(tempset)
     return np.array(path_info)
-    
-# departure
-p_dep = np.array([10.6425, 59.1640])
-# destination
-p_des = np.array([11.8563, 56.7513])
-# construct route 1
-iso_set1, iso_trimmed1 = isochrone(p_dep, p_des, 1, 20, 20, 1, 0.5, 20, 0, 0)
-iso_path1 = construct_isopath(iso_set1)  
-ind1 = int(np.argwhere(iso_path1[:,-1,3] == min(iso_path1[:,-1,3])).ravel())  
+ 
 
-m = Basemap(
-  projection="merc",
-  resolution='i',
-  area_thresh=0.1,
-  llcrnrlon=9.5,
-  llcrnrlat=54,
-  urcrnrlon=12.5,
-  urcrnrlat=60
-)
-plt.figure(figsize=(15, 21))
+# departure
+p_dep = np.array([3.9, 52.0])
+# destination
+p_des = np.array([-5.0, 49.0])
+# construct route 1
+iso_set1, iso_trimmed1 = isochrone(p_dep, p_des, 1, 20, 20, 1, 1, 20, 0, 0)
+iso_path1 = construct_isopath(iso_set1)
+ind1 = int(np.argwhere(iso_path1[:,-1,3] == min(iso_path1[:,-1,3])).ravel())
+print "1 finished!"
+# lowest fuel consumption
+tran_fuelc = iso_path1[ind1][-1, 3]
+tran_timec = iso_path1[ind1][-1, 0]
+# departure
+p_dep = np.array([-5.0, 49.0])
+# destination
+p_des = np.array([-73.0, 40.0])
+# construct route 2
+iso_set2, iso_trimmed2 = isochrone(p_dep, p_des, 1, 20, 20, 6, 2, 20, tran_timec, tran_fuelc)
+iso_path2 = construct_isopath(iso_set2)
+ind2 = int(np.argwhere(iso_path2[:,-1,3] == min(iso_path2[:,-1,3])).ravel())
+
+# drawing
+plt.figure(figsize=(20, 15))
+plt.title('Isochrone', fontsize=20, fontweight='bold')
 for num, ip in enumerate(iso_path1):
     longi = ip[:, 1]
     lati = ip[:, 2]
@@ -286,12 +293,60 @@ for num, ip in enumerate(iso_path1):
     if num == ind1:
         m.plot(x, y, marker=None, linewidth=3, color='g')
         m.scatter(x, y, marker='D',color='g')
-    m.plot(x, y, marker=None, color='b') 
-m.drawparallels(np.arange(-90.,120.,1.), labels=[1,0,0,0], fontsize=15)
-m.drawmeridians(np.arange(-180.,180.,1.), labels=[0,0,0,1], fontsize=15)    
+    m.plot(x, y, marker=None, color='b')
+for num, ip in enumerate(iso_path2):
+    longi = ip[:, 1]
+    lati = ip[:, 2]
+    x, y = m(longi, lati)
+    if num == ind2:
+        m.plot(x, y, marker=None, linewidth=3, color='g')
+        m.scatter(x, y, marker='D',color='g')
+    m.plot(x, y, marker=None, color='b')
+
+m.drawparallels(np.arange(-90.,120.,5.), labels=[1,0,0,0], fontsize=15)
+m.drawmeridians(np.arange(-180.,180.,5.), labels=[0,0,0,1], fontsize=15)
 m.drawcoastlines()
 m.fillcontinents()
 plt.show()
+
+
+
+
+
+
+   
+## departure
+#p_dep = np.array([10.6425, 59.1640])
+## destination
+#p_des = np.array([11.8563, 56.7513])
+## construct route 1
+#iso_set1, iso_trimmed1 = isochrone(p_dep, p_des, 1, 20, 20, 1, 0.5, 20, 0, 0)
+#iso_path1 = construct_isopath(iso_set1)  
+#ind1 = int(np.argwhere(iso_path1[:,-1,3] == min(iso_path1[:,-1,3])).ravel())  
+#
+#m = Basemap(
+#  projection="merc",
+#  resolution='i',
+#  area_thresh=0.1,
+#  llcrnrlon=9.5,
+#  llcrnrlat=54,
+#  urcrnrlon=12.5,
+#  urcrnrlat=60
+#)
+#plt.figure(figsize=(15, 21))
+#for num, ip in enumerate(iso_path1):
+#    longi = ip[:, 1]
+#    lati = ip[:, 2]
+#    x, y = m(longi, lati)
+#    if num == ind1:
+#        m.plot(x, y, marker=None, linewidth=3, color='g')
+#        m.scatter(x, y, marker='D',color='g')
+#    m.plot(x, y, marker=None, color='b') 
+#m.drawparallels(np.arange(-90.,120.,1.), labels=[1,0,0,0], fontsize=15)
+#m.drawmeridians(np.arange(-180.,180.,1.), labels=[0,0,0,1], fontsize=15)    
+#m.drawcoastlines()
+#m.fillcontinents()
+#plt.show()
 
 ## departure
 #p_dep = np.array([3.9, 52.0])

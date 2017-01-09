@@ -211,7 +211,7 @@ def isopone(departure, destination, delta_c, m, Vs, fuel_constraint, delta_d, k,
         dest.parent.append(child)
     node_dict[snum + 1] = dest   
               
-    return node_dict
+    return node_dict, trimmed
 
      
 tran_fuelc = 0
