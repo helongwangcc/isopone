@@ -62,7 +62,7 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
         nodeset[i + 1] = np.array([dy3_node(tempnode[0], tempnode[1], i + 1, nodes) for nodes, tempnode in enumerate(temp_pos)])
     nodeset[K] = np.array([dy3_node(longi_c[-1], lati_c[-1], K, (n - 1) / 2)])
     #
-    vn = np.linspace(0.8 * v, 1.1 * v, 20)
+    vn = np.linspace(0.6 * v, 1.1 * v, 20)
     nodeset[1][0].time = Initial_time
     nodeset[1][0].dtime = Initial_time
     nodeset[1][0].fuelc = Initial_fuelc
@@ -84,7 +84,7 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
             temp_speed = vn
             temp_state = np.arange(len(vn))
             # FUEL CONSUMPTION FOR ALL SETTING SPEED
-            temp_fuelc = np.array(ship_info.weather2fuel(temp_speed, nodes_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head))
+            temp_fuelc = np.array(ship_info.weather2fuel(temp_speed, nodes_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)).T
             #  
             check_index = np.argwhere(temp_fuelc[:,1] <= ship_info.Engine).ravel()
             if check_index.size == 0:
@@ -155,9 +155,10 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
                         sub_dist, sub_bearing = greatcircle_inverse(subset.longi, subset.lati, nodes.longi, nodes.lati)
                         temp_speed = vn      
                         temp_state = np.arange(len(vn))
-                        sub_fuelc = np.array(ship_info.weather2fuel(temp_speed, sub_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head))
+                        sub_fuelc = np.array(ship_info.weather2fuel(temp_speed, sub_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)).T
                         check_index = np.argwhere(sub_fuelc[:,1] <= ship_info.Engine).ravel()                        
-                        if check_index.size == 0:                            
+                        if check_index.size == 0: 
+                            print "power exceed!"
                             continue
                         elif check_index.size == len(vn):
                             pass
@@ -166,16 +167,16 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
                             temp_state = temp_state[check_index]
                             sub_fuelc = np.array(ship_info.weather2fuel(temp_speed, nodes_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head))
 
-                        pathc.append([subset] * len(temp_speed))
-                        speedc.append(temp_speed)
-                        timec.append(sub_dist / temp_speed / 1.852 + subset.time[num])
-                        state.append(temp_state)
-                        forestate.append([num] * len(temp_speed))
-                        PE.append(sub_fuelc[0])
-                        PS.append(sub_fuelc[1])
-                        fuel_kg_per_hour.append(sub_fuelc[2])
-                        fuel_kg_per_nm.append(sub_fuelc[3])
-                        fuelc.append(sub_fuelc[3] * sub_dist / 1.852 + subset.fuelc[num])
+                        pathc.extend([subset] * len(temp_speed))
+                        speedc.extend(temp_speed.tolist())
+                        timec.extend((sub_dist / temp_speed / 1.852 + subset.time[num]).tolist())
+                        state.extend(temp_state.tolist())
+                        forestate.extend([num] * len(temp_speed))
+                        PE.extend(sub_fuelc[0].tolist())
+                        PS.extend(sub_fuelc[1].tolist())
+                        fuel_kg_per_hour.extend(sub_fuelc[2].tolist())
+                        fuel_kg_per_nm.extend(sub_fuelc[3].tolist())
+                        fuelc.extend((sub_fuelc[3] * sub_dist / 1.852 + subset.fuelc[num]).tolist())
                         
                 pathc = np.array(pathc).ravel()
                 timec = np.array(timec).ravel()
@@ -187,6 +188,17 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
                 fuel_kg_per_hour = np.array(fuel_kg_per_hour).ravel()
                 fuel_kg_per_nm = np.array(fuel_kg_per_nm).ravel()
                 fuelc = np.array(fuelc).ravel()
+#                print pathc
+#                print timec
+#                print state
+#                print forestate
+#                print speedc
+#                print PE
+#                print PS.size
+#                print fuel_kg_per_hour
+#                print fuel_kg_per_nm.size
+#                print fuelc.size
+                
                 time_sec = np.linspace(max(timec), min(timec) - min(timec) * rand() / 100, 21)
                 temp_ind = []
                 for num in range(10,20):
@@ -213,38 +225,84 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
     return nodeset
      
 
-def construct_dypath3(dy_set3):
-    K = max(dy_set3.keys())
-    p = dy_set3[K][0]     
-    path_info = []
-    while K - 2 > 0:
-        ind = np.argwhere(p.fuelc == min(p.fuelc)).ravel()
-        ind = int(ind)
-        minfuel = np.float(p.fuelc[ind])
-        mintime = np.float(p.time[ind])
-        minspeed = np.float(p.speed[ind])
-        minpe = np.float(p.PE[ind])
-        minps = np.float(p.PS[ind])
-        minfhour = np.float(p.fuel_kg_per_hour[ind])
-        minfnm = np.float(p.fuel_kg_per_nm[ind])
-        path_info.append([mintime, p.longi, p.lati, minfuel, minspeed, minpe, minps, minfhour, minfnm])
-        p = p.spath[ind]
-        K = K - 1
-    ind = np.argwhere(p.fuelc == min(p.fuelc)).ravel()
-    ind = int(ind)
-    minfuel = np.float(p.fuelc[ind])
-    mintime = np.float(p.time[ind])
-    minspeed = np.float(p.speed[ind])
-    minpe = np.float(p.PE[ind])
-    minps = np.float(p.PS[ind])
-    minfhour = np.float(p.fuel_kg_per_hour[ind])
-    minfnm = np.float(p.fuel_kg_per_nm[ind])
-    path_info.append([mintime, p.longi, p.lati, minfuel, minspeed, minpe, minps, minfhour, minfnm])
-    p = p.spath[0]
-    path_info.append([ p.time, p.longi, p.lati, p.fuelc, p.speed, p.PE, p.PS, p.fuel_kg_per_hour, p.fuel_kg_per_nm])
-    path_info = path_info[::-1]
+#def construct_dypath3(dy_set3):
+#    K = max(dy_set3.keys())
+#    p = dy_set3[K][0]     
+#    path_info = []
+#    while K - 2 > 0:
+#        ind = np.argwhere(p.fuelc == min(p.fuelc)).ravel()
+#        ind = int(ind)
+#        minfuel = np.float(p.fuelc[ind])
+#        mintime = np.float(p.time[ind])
+#        minspeed = np.float(p.speed[ind])
+#        minpe = np.float(p.PE[ind])
+#        minps = np.float(p.PS[ind])
+#        minfhour = np.float(p.fuel_kg_per_hour[ind])
+#        minfnm = np.float(p.fuel_kg_per_nm[ind])
+#        path_info.append([mintime, p.longi, p.lati, minfuel, minspeed, minpe, minps, minfhour, minfnm])
+#        p = p.spath[ind]
+#        K = K - 1
+#    ind = np.argwhere(p.fuelc == min(p.fuelc)).ravel()
+#    ind = int(ind)
+#    minfuel = np.float(p.fuelc[ind])
+#    mintime = np.float(p.time[ind])
+#    minspeed = np.float(p.speed[ind])
+#    minpe = np.float(p.PE[ind])
+#    minps = np.float(p.PS[ind])
+#    minfhour = np.float(p.fuel_kg_per_hour[ind])
+#    minfnm = np.float(p.fuel_kg_per_nm[ind])
+#    path_info.append([mintime, p.longi, p.lati, minfuel, minspeed, minpe, minps, minfhour, minfnm])
+#    p = p.spath[0]
+#    path_info.append([ p.time, p.longi, p.lati, p.fuelc, p.speed, p.PE, p.PS, p.fuel_kg_per_hour, p.fuel_kg_per_nm])
+#    path_info = path_info[::-1]
+#    
+#    return np.array(path_info)
     
-    return np.array(path_info)
+    
+
+#def construct_dypath3(dy_set3):
+#    K = max(dy_set3.keys())
+#    des = dy_set3[K][0]
+#    p = dy_set3[K][0]     
+#    path_info = []
+#    for i in range(len(des.state)):
+#        tempset = []
+#        parent = 
+#            
+#            
+#    
+#    
+#    
+#    
+#    
+#    while K - 2 > 0:
+#        ind = np.argwhere(p.fuelc == min(p.fuelc)).ravel()
+#        ind = int(ind)
+#        minfuel = np.float(p.fuelc[ind])
+#        mintime = np.float(p.time[ind])
+#        minspeed = np.float(p.speed[ind])
+#        minpe = np.float(p.PE[ind])
+#        minps = np.float(p.PS[ind])
+#        minfhour = np.float(p.fuel_kg_per_hour[ind])
+#        minfnm = np.float(p.fuel_kg_per_nm[ind])
+#        path_info.append([mintime, p.longi, p.lati, minfuel, minspeed, minpe, minps, minfhour, minfnm])
+#        p = p.spath[ind]
+#        K = K - 1
+#    ind = np.argwhere(p.fuelc == min(p.fuelc)).ravel()
+#    ind = int(ind)
+#    minfuel = np.float(p.fuelc[ind])
+#    mintime = np.float(p.time[ind])
+#    minspeed = np.float(p.speed[ind])
+#    minpe = np.float(p.PE[ind])
+#    minps = np.float(p.PS[ind])
+#    minfhour = np.float(p.fuel_kg_per_hour[ind])
+#    minfnm = np.float(p.fuel_kg_per_nm[ind])
+#    path_info.append([mintime, p.longi, p.lati, minfuel, minspeed, minpe, minps, minfhour, minfnm])
+#    p = p.spath[0]
+#    path_info.append([ p.time, p.longi, p.lati, p.fuelc, p.speed, p.PE, p.PS, p.fuel_kg_per_hour, p.fuel_kg_per_nm])
+#    path_info = path_info[::-1]
+#    
+#    return np.array(path_info)
     
 ## departure
 #p_dep = np.array([3.9, 52.0])
