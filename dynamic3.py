@@ -2,7 +2,7 @@ import numpy as np
 from GeneralFunction import *
 from Ship_FCM import *
 from numpy.random import rand
-#from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt
 
 # BATHYMETRIC CLASS
 bathymetry = Bathymetry("GEBCO_2014_2D_-75.0_30.0_10.0_55.0.nc")
@@ -215,41 +215,6 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
     return nodeset
      
 
-#def construct_dypath3(dy_set3):
-#    K = max(dy_set3.keys())
-#    p = dy_set3[K][0]     
-#    path_info = []
-#    while K - 2 > 0:
-#        ind = np.argwhere(p.fuelc == min(p.fuelc)).ravel()
-#        ind = int(ind)
-#        minfuel = np.float(p.fuelc[ind])
-#        mintime = np.float(p.time[ind])
-#        minspeed = np.float(p.speed[ind])
-#        minpe = np.float(p.PE[ind])
-#        minps = np.float(p.PS[ind])
-#        minfhour = np.float(p.fuel_kg_per_hour[ind])
-#        minfnm = np.float(p.fuel_kg_per_nm[ind])
-#        path_info.append([mintime, p.longi, p.lati, minfuel, minspeed, minpe, minps, minfhour, minfnm])
-#        p = p.spath[ind]
-#        K = K - 1
-#    ind = np.argwhere(p.fuelc == min(p.fuelc)).ravel()
-#    ind = int(ind)
-#    minfuel = np.float(p.fuelc[ind])
-#    mintime = np.float(p.time[ind])
-#    minspeed = np.float(p.speed[ind])
-#    minpe = np.float(p.PE[ind])
-#    minps = np.float(p.PS[ind])
-#    minfhour = np.float(p.fuel_kg_per_hour[ind])
-#    minfnm = np.float(p.fuel_kg_per_nm[ind])
-#    path_info.append([mintime, p.longi, p.lati, minfuel, minspeed, minpe, minps, minfhour, minfnm])
-#    p = p.spath[0]
-#    path_info.append([ p.time, p.longi, p.lati, p.fuelc, p.speed, p.PE, p.PS, p.fuel_kg_per_hour, p.fuel_kg_per_nm])
-#    path_info = path_info[::-1]
-#    
-#    return np.array(path_info)
-    
-    
-
 def construct_dypath3(dy_set3):
     K = max(dy_set3.keys())
     des = dy_set3[K][0]     
@@ -259,54 +224,63 @@ def construct_dypath3(dy_set3):
         tempset = []
         tempset.append([p.time[i],p.longi, p.lati,p.speed[i],p.PE[i],p.PS[i],p.fuel_kg_per_hour[i], p.fuel_kg_per_nm[i], p.fuelc[i]])
         f = p.forestate[i]
-        p = p.spath[i]
-        while p.spath != []:
-            tempset.append([p.time[f],p.longi, p.lati,p.speed[f],p.PE[f],p.PS[f],p.fuel_kg_per_hour[f], p.fuel_kg_per_nm[f], p.fuelc[f]])
-            f = p.forestate[f]
-            p = p.spath[f]
-        tempset.append([p.time[f],p.longi, p.lati,p.speed[f],p.PE[f],p.PS[f],p.fuel_kg_per_hour[f], p.fuel_kg_per_nm[f], p.fuelc[f]])
+        s = p.spath[i]
+        while len(s.spath) != 1:
+            temp = s.spath[f]
+            tempset.append([s.time[f],s.longi, s.lati, s.speed[f], s.PE[f], s.PS[f], s.fuel_kg_per_hour[f], s.fuel_kg_per_nm[f], s.fuelc[f]])
+            f = s.forestate[f]
+            s = temp
+        tempset.append([s.time[f],s.longi, s.lati, s.speed[f], s.PE[f], s.PS[f], s.fuel_kg_per_hour[f], s.fuel_kg_per_nm[f], s.fuelc[f]])
+        s = s.spath[0]
+        tempset.append([s.time, s.longi, s.lati, 0, 0, 0, 0, 0, s.fuelc])
         tempset = tempset[::-1]
         path_info.append(tempset)
     
     return np.array(path_info)
-    
-## departure
-#p_dep = np.array([3.9, 52.0])
-## destination
-#p_des = np.array([-5.0, 49.0])
-## # construct route 1
-#dy3_set1 = ThreeDDP(p_dep, p_des, 20, 1, 31, 0.08, 3, 0, 0)
-#dy3_path1 = construct_dypath3(dy3_set1)
-#dy3timec = dy3_path1[-1,0]
-#dy3fuelc = dy3_path1[-1,3]
-f = p.forestate[0]
-while p.spath != []:
-    p = p.spath[f]
-    print "path: %d" %len(p.state)    
-    f = p.forestate[f]
 
 
-dy3timec = 0
-dy3fuelc = 0
-
+# departure
+p_dep = np.array([3.9, 52.0])
+# destination
+p_des = np.array([-5.0, 49.0])
+# # construct route 1
+dy3_set1 = ThreeDDP(p_dep, p_des, 20, 1, 31, 0.08, 3, 0, 0)
+dy3_path1 = construct_dypath3(dy3_set1)
+ind1 = int(np.argwhere(dy3_path1[:,-1,8] == min(dy3_path1[:,-1,8])).ravel())
+dy3timec = dy3_path1[ind1][-1,0]
+dy3fuelc = dy3_path1[ind1][-1,8]
 # departure
 p_dep = np.array([-5.0, 49.0])
 # destination
 p_des = np.array([-73.0, 40.0])
 # construct route 2
 dy3_set2 = ThreeDDP(p_dep, p_des, 20, 6, 31, 0.1, 3, dy3timec, dy3fuelc)
-#dy3_path2 = construct_dypath3(dy3_set2)
+dy3_path2 = construct_dypath3(dy3_set2)
+ind2 = int(np.argwhere(dy3_path2[:,-1,8] == min(dy3_path2[:,-1,8])).ravel())
 
-#plt.figure(figsize=(20, 15))
-#x, y = m(dy3_path1[:,1], dy3_path1[:,2])
-#m.plot(x, y, marker=None, linewidth=3, color='g')
-#m.scatter(x, y, marker='D',color='g')
-#
-#x, y = m(dy3_path2[:,1], dy3_path2[:,2])
-#m.plot(x, y, marker=None, linewidth=3, color='g')
-#m.scatter(x, y, marker='D',color='g')
-#m.drawparallels(np.arange(-90.,120.,5.), labels=[1,0,0,0], fontsize=15)
-#m.drawmeridians(np.arange(-180.,180.,5.), labels=[0,0,0,1], fontsize=15)
-#m.drawcoastlines()
-#m.fillcontinents()
-#plt.show()
+m = Basemap(
+  projection="merc",
+  resolution='l',
+  area_thresh=0.1,
+  llcrnrlon=-75,
+  llcrnrlat=35,
+  urcrnrlon=10,
+  urcrnrlat=55
+)
+
+plt.figure(figsize=(20, 15))
+
+plt.title('3D Dynamic Programming', fontsize=20, fontweight='bold')
+x, y = m(dy3_path1[ind1][:, 1], dy3_path1[ind1][:, 2])
+m.plot(x, y, marker=None, linewidth=3, color='g', label = "3DDP")
+m.scatter(x, y, marker='D',color='g')
+x, y = m(dy3_path2[ind2][:, 1], dy3_path2[ind2][:, 2])
+m.plot(x, y, marker=None, linewidth=3, color='g')
+m.scatter(x, y, marker='D',color='g')
+m.drawparallels(np.arange(-90.,120.,5.), labels=[1,0,0,0], fontsize=15)
+m.drawmeridians(np.arange(-180.,180.,5.), labels=[0,0,0,1], fontsize=15)
+m.drawcoastlines()
+m.fillcontinents()
+plt.legend(loc = 4,prop={'size':18})
+plt.show()
+dy3_int = np.vstack((dy3_path1[ind1][1:], dy3_path2[ind2][1:]))
