@@ -59,9 +59,10 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
         # node number starts at 0
         nodeset[i + 1] = np.array([dy3_node(tempnode[0], tempnode[1], i + 1, nodes) for nodes, tempnode in enumerate(temp_pos)])
     nodeset[K] = np.array([dy3_node(longi_c[-1], lati_c[-1], K, (n - 1) / 2)])
-    #
+    ####################################################
     # ENGINE RATE FOR CHANGING
-    rate = np.linspace(0.6, 1, 9)
+    rate = np.linspace(0.6,1,9)
+    #
     nodeset[1][0].time = Initial_time
     nodeset[1][0].fuelc = Initial_fuelc
     nodeset[1][0].speed = v
@@ -79,41 +80,32 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
         else:
             nodes.spath.append(nodeset[1][0])
             nodes_dist, nodes_bearing = greatcircle_inverse(nodeset[1][0].longi, nodeset[1][0].lati, nodes.longi, nodes.lati)
-            temp_speed = vn
-            temp_state = np.arange(len(vn))
+            temp_speed = ship_info.power_predict(rate, v, nodes_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)
+            temp_state = np.arange(len(rate))
             # FUEL CONSUMPTION FOR ALL SETTING SPEED
             temp_fuelc = np.array(ship_info.weather2fuel(temp_speed, nodes_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)).T
-            #  
-            check_index = np.argwhere(temp_fuelc[:,1] <= ship_info.Engine).ravel()
-            if check_index.size == 0:
-                print "Engine Power exceeded!"
-                continue
-            elif check_index.size == len(vn):
-                pass
-            else:
-                  temp_speed = temp_speed[check_index]
-                  temp_state = temp_state[check_index]
-                  temp_fuelc = np.array(ship_info.weather2fuel(temp_speed, nodes_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head))
             temp_timec = nodes_dist / temp_speed / 1.852 + nodeset[1][0].time
-            time_sec = np.linspace(max(temp_timec), min(temp_timec) - min(temp_timec) * rand() / 100, 21)
+            # CREATE WEIGHT FUNCTION
+            temp_wfun = (temp_fuelc[:,1] / ship_info.Engine) * 0.2 + (nodes_dist / temp_speed / 1.852 / delta_t) * (1 - 0.2)
+            time_sec = np.linspace(max(temp_timec), min(temp_timec) - min(temp_timec) * rand() / 100, 10)
             temp_ind = []
-            for num in range(10, 20):
+            for num in range(9):
                 ind = np.argwhere((temp_timec <= time_sec[num]) & (temp_timec >= time_sec[num + 1]))
                 if ind.size == 0:
                     continue
                 else:
                     # CHOOSE THE LOWEST FUEL CONSUMPTION
-                    temp_ind.append(np.argwhere(temp_fuelc[3] == min(temp_fuelc[3][ind])))
+                    temp_ind.append(np.argwhere(temp_wfun == min(temp_wfun[ind])))
                     
             temp_ind = np.array(temp_ind)
             nodes.speed = temp_speed[temp_ind].ravel()
             nodes.state = temp_state[temp_ind].ravel()
             nodes.time = temp_timec[temp_ind].ravel()
-            nodes.PE = temp_fuelc[0][temp_ind].ravel()
-            nodes.PS = temp_fuelc[1][temp_ind].ravel()
-            nodes.fuel_kg_per_hour = temp_fuelc[2][temp_ind].ravel()
-            nodes.fuel_kg_per_nm = temp_fuelc[3][temp_ind].ravel()
-            nodes.fuelc = temp_fuelc[3][temp_ind].ravel() * nodes_dist / 1.852 + Initial_fuelc
+            nodes.PE = temp_fuelc[:,0][temp_ind].ravel()
+            nodes.PS = temp_fuelc[:,1][temp_ind].ravel()
+            nodes.fuel_kg_per_hour = temp_fuelc[:,2][temp_ind].ravel()
+            nodes.fuel_kg_per_nm = temp_fuelc[:,3][temp_ind].ravel()
+            nodes.fuelc = temp_fuelc[:,3][temp_ind].ravel() * nodes_dist / 1.852 + Initial_fuelc
             
     for i in range(2, K):
         for countnum, nodes in enumerate(nodeset[i + 1]):
@@ -141,6 +133,8 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
                 PS = []
                 fuel_kg_per_hour = []
                 fuel_kg_per_nm = []
+                # ADD WEIGHT FUNCTION
+                weightfunction = []
                 
                 for subset in temp_subset:
                     for num in range(len(subset.state)):
@@ -153,31 +147,24 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
                         i_cu = weather_info.cu([subset.lati, subset.longi, subset.time[num]])
                         i_cv = weather_info.cv([subset.lati, subset.longi, subset.time[num]])
                         sub_dist, sub_bearing = greatcircle_inverse(subset.longi, subset.lati, nodes.longi, nodes.lati)
-                        temp_speed = vn      
-                        temp_state = np.arange(len(vn))
-                        sub_fuelc = np.array(ship_info.weather2fuel(temp_speed, sub_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head)).T
-                        check_index = np.argwhere(sub_fuelc[:,1] <= ship_info.Engine).ravel()                        
-                        if check_index.size == 0: 
-                            print "power exceed!"
-                            continue
-                        elif check_index.size == len(vn):
-                            pass
-                        else:
-                            temp_speed = temp_speed[check_index]
-                            temp_state = temp_state[check_index]
-                            sub_fuelc = np.array(ship_info.weather2fuel(temp_speed, nodes_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head))
+                        temp_speed = ship_info.power_predict(rate, v, sub_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head )    
+                        temp_state = np.arange(len(temp_speed))
+                        sub_fuelc = np.array(ship_info.weather2fuel(temp_speed, sub_bearing, i_cu, i_cv, i_depth, i_wind_U, i_wind_V, i_Hs, i_Tp, i_head))
+                        # WEIGHT FUNCTION
+                        temp_wfun = (sub_fuelc[1] / ship_info.Engine) * 0.2 + (sub_dist / temp_speed / 1.852 / delta_t) * (1 - 0.2)
                             
                         # RECORD INFORMATION
-                        pathc.extend([subset] * len(temp_speed))
-                        speedc.extend(temp_speed.tolist())
-                        timec.extend((sub_dist / temp_speed / 1.852 + subset.time[num]).tolist())
-                        state.extend(temp_state.tolist())
-                        forestate.extend([num] * len(temp_speed))
-                        PE.extend(sub_fuelc[0].tolist())
-                        PS.extend(sub_fuelc[1].tolist())
-                        fuel_kg_per_hour.extend(sub_fuelc[2].tolist())
-                        fuel_kg_per_nm.extend(sub_fuelc[3].tolist())
-                        fuelc.extend((sub_fuelc[3] * sub_dist / 1.852 + subset.fuelc[num]).tolist())
+                        pathc.append([subset] * len(temp_speed))
+                        speedc.append(temp_speed)
+                        timec.append(sub_dist / temp_speed / 1.852 + subset.time[num])
+                        state.append(temp_state)
+                        forestate.append([num] * len(temp_speed))
+                        PE.append(sub_fuelc[0])
+                        PS.append(sub_fuelc[1])
+                        fuel_kg_per_hour.append(sub_fuelc[2])
+                        fuel_kg_per_nm.append(sub_fuelc[3])
+                        fuelc.append(sub_fuelc[3] * sub_dist / 1.852 + subset.fuelc[num])
+                        weightfunction.append(temp_wfun)
                 # ARRANGE INFORMATION         
                 pathc = np.array(pathc).ravel()
                 timec = np.array(timec).ravel()
@@ -189,15 +176,16 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
                 fuel_kg_per_hour = np.array(fuel_kg_per_hour).ravel()
                 fuel_kg_per_nm = np.array(fuel_kg_per_nm).ravel()
                 fuelc = np.array(fuelc).ravel()
+                weightfunction = np.array(weightfunction).ravel()
                 # DIVIDED TIME SECTORS
-                time_sec = np.linspace(max(timec), min(timec) - min(timec) * rand() / 100, 21)
+                time_sec = np.linspace(max(timec), min(timec) - min(timec) * rand() / 100, 10)
                 temp_ind = []
-                for num in range(10,20):
+                for num in range(9):
                     ind = np.argwhere((timec <= time_sec[num]) & (timec >= time_sec[num + 1]))
                     if ind.size == 0:
                         continue
                     else:
-                        temp_ind.append(np.argwhere(fuelc == min(fuelc[ind])))
+                        temp_ind.append(np.argwhere(weightfunction == min(weightfunction[ind])))
                 temp_ind = np.array(temp_ind)
                 if temp_ind.size == 0:
                     continue
@@ -240,25 +228,15 @@ def construct_dypath3(dy_set3):
     return np.array(path_info)
 
 
-# departure
-p_dep = np.array([3.9, 52.0])
-# destination
-p_des = np.array([-5.0, 49.0])
-# # construct route 1
-dy3_set1 = ThreeDDP(p_dep, p_des, 20, 1, 31, 0.08, 3, 0, 0)
-dy3_path1 = construct_dypath3(dy3_set1)
-ind1 = int(np.argwhere(dy3_path1[:,-1,8] == min(dy3_path1[:,-1,8])).ravel())
-dy3timec = dy3_path1[ind1][-1,0]
-dy3fuelc = dy3_path1[ind1][-1,8]
+
 # departure
 p_dep = np.array([-5.0, 49.0])
 # destination
 p_des = np.array([-73.0, 40.0])
 # construct route 2
-dy3_set2 = ThreeDDP(p_dep, p_des, 20, 6, 31, 0.1, 3, dy3timec, dy3fuelc)
+dy3_set2 = ThreeDDP(p_dep, p_des, 20, 6, 31, 0.1, 3, 21.144, 0)
 dy3_path2 = construct_dypath3(dy3_set2)
 ind2 = int(np.argwhere(dy3_path2[:,-1,8] == min(dy3_path2[:,-1,8])).ravel())
-
 m = Basemap(
   projection="merc",
   resolution='l',
@@ -272,16 +250,66 @@ m = Basemap(
 plt.figure(figsize=(20, 15))
 
 plt.title('3D Dynamic Programming', fontsize=20, fontweight='bold')
-x, y = m(dy3_path1[ind1][:, 1], dy3_path1[ind1][:, 2])
-m.plot(x, y, marker=None, linewidth=3, color='g', label = "3DDP")
-m.scatter(x, y, marker='D',color='g')
-x, y = m(dy3_path2[ind2][:, 1], dy3_path2[ind2][:, 2])
-m.plot(x, y, marker=None, linewidth=3, color='g')
-m.scatter(x, y, marker='D',color='g')
+for i in range(len(dy3_path2)):
+    x, y = m(dy3_path2[i][:, 1], dy3_path2[i][:, 2])
+    if i == ind2:
+        m.plot(x, y, marker=None, linewidth=3, color='g')
+        m.scatter(x, y, marker='D',color='g')
+    m.plot(x, y, marker=None, linewidth=1, color='b')
+
 m.drawparallels(np.arange(-90.,120.,5.), labels=[1,0,0,0], fontsize=15)
 m.drawmeridians(np.arange(-180.,180.,5.), labels=[0,0,0,1], fontsize=15)
 m.drawcoastlines()
 m.fillcontinents()
-plt.legend(loc = 4,prop={'size':18})
 plt.show()
-dy3_int = np.vstack((dy3_path1[ind1][1:], dy3_path2[ind2][1:]))
+
+
+
+
+
+
+## departure
+#p_dep = np.array([3.9, 52.0])
+## destination
+#p_des = np.array([-5.0, 49.0])
+## # construct route 1
+#dy3_set1 = ThreeDDP(p_dep, p_des, 20, 1, 31, 0.08, 3, 0, 0)
+#dy3_path1 = construct_dypath3(dy3_set1)
+#ind1 = int(np.argwhere(dy3_path1[:,-1,8] == min(dy3_path1[:,-1,8])).ravel())
+#dy3timec = dy3_path1[ind1][-1,0]
+#dy3fuelc = dy3_path1[ind1][-1,8]
+## departure
+#p_dep = np.array([-5.0, 49.0])
+## destination
+#p_des = np.array([-73.0, 40.0])
+## construct route 2
+#dy3_set2 = ThreeDDP(p_dep, p_des, 20, 6, 31, 0.1, 3, dy3timec, dy3fuelc)
+#dy3_path2 = construct_dypath3(dy3_set2)
+#ind2 = int(np.argwhere(dy3_path2[:,-1,8] == min(dy3_path2[:,-1,8])).ravel())
+#
+#m = Basemap(
+#  projection="merc",
+#  resolution='l',
+#  area_thresh=0.1,
+#  llcrnrlon=-75,
+#  llcrnrlat=35,
+#  urcrnrlon=10,
+#  urcrnrlat=55
+#)
+#
+#plt.figure(figsize=(20, 15))
+#
+#plt.title('3D Dynamic Programming', fontsize=20, fontweight='bold')
+#x, y = m(dy3_path1[ind1][:, 1], dy3_path1[ind1][:, 2])
+#m.plot(x, y, marker=None, linewidth=3, color='g', label = "3DDP")
+#m.scatter(x, y, marker='D',color='g')
+#x, y = m(dy3_path2[ind2][:, 1], dy3_path2[ind2][:, 2])
+#m.plot(x, y, marker=None, linewidth=3, color='g')
+#m.scatter(x, y, marker='D',color='g')
+#m.drawparallels(np.arange(-90.,120.,5.), labels=[1,0,0,0], fontsize=15)
+#m.drawmeridians(np.arange(-180.,180.,5.), labels=[0,0,0,1], fontsize=15)
+#m.drawcoastlines()
+#m.fillcontinents()
+#plt.legend(loc = 4,prop={'size':18})
+#plt.show()
+#dy3_int = np.vstack((dy3_path1[ind1][1:], dy3_path2[ind2][1:]))

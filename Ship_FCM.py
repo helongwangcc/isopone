@@ -1038,10 +1038,10 @@ class Ship_FCM:
         
     def power_predict(self, rate, V_gps, heading_ship, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft = 6.8):
         
-        V = np.linspace(0.3 * V_gps, 1.1 * V_gps, 20)
+        V = np.linspace(0.4 * V_gps, 1.1 * V_gps, 20)
         PS = np.array(self.weather2fuel(V, heading_ship, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft))[1]
         fitfunc = interp1d(PS, V, kind = 'cubic')
-        vfit = fitfun(self.Engine * rate)
+        vfit = fitfunc(self.Engine * rate)
         return vfit
         
         
