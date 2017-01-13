@@ -1034,19 +1034,15 @@ class Ship_FCM:
                 vfit.append(fitfunc(self.Engine))
             vfit = np.array(vfit).ravel()
         return vfit
-        
-        
-#    def speed_fit_3D(self, V_gps, heading_ship, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft = 6.8):
-#        '''
-#        find ship speed in certain engine power
-#        '''
-#        V = np.linspace(0.3 * V_gps, 1.1 * V_gps, 10)
-#        PS = np.array(self.weather2fuel(V, heading_ship, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft))[1]
-#
-#
-#        fitfunc = interp1d(PS, V, kind = 'cubic')
-#        vfit = fitfunc(self.Engine)
-#       
-#        return vfit
     
+        
+    def power_predict(self, rate, V_gps, heading_ship, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft = 6.8):
+        
+        V = np.linspace(0.3 * V_gps, 1.1 * V_gps, 20)
+        PS = np.array(self.weather2fuel(V, heading_ship, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft))[1]
+        fitfunc = interp1d(PS, V, kind = 'cubic')
+        vfit = fitfun(self.Engine * rate)
+        return vfit
+        
+        
 

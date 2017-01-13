@@ -60,7 +60,8 @@ def ThreeDDP(departure, destination, v, delta_t, n, eta, q, Initial_time, Initia
         nodeset[i + 1] = np.array([dy3_node(tempnode[0], tempnode[1], i + 1, nodes) for nodes, tempnode in enumerate(temp_pos)])
     nodeset[K] = np.array([dy3_node(longi_c[-1], lati_c[-1], K, (n - 1) / 2)])
     #
-    vn = np.linspace(0.6 * v, 1.1 * v, 20)
+    # ENGINE RATE FOR CHANGING
+    rate = np.linspace(0.6, 1, 9)
     nodeset[1][0].time = Initial_time
     nodeset[1][0].fuelc = Initial_fuelc
     nodeset[1][0].speed = v
