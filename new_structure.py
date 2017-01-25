@@ -15,19 +15,16 @@ ship_info = Ship_FCM()
 bathymetry = Bathymetry("GEBCO_2014_2D_-75.0_30.0_10.0_55.0.nc")
 
 class state:
-    def __init__(self, longi, lati, bearing):
-        self.longi = longi
-        self.lati = lati
-        self.bearing = bearing
-        self.time = 0.0
-        self.speed = 0.0
-        
-        
-class GA_beta:
-    def __init__(self， dep, des, n):
+    def __init__(self, dep, des, n, initial_time):
+        self.initial_time = initial_time
         X,Y = m.gcpoints(dep[0], dep[1], des[0], des[1], n)
-        x,y = m(X, Y, inverse = True)
-        
+        x, y = m(X,Y, inverse = True)
+        dist_bearing = []
+        for i in range(n - 1):
+            dist_bearing.append(greatcircle_inverse(x[i], y[i], x[i+1], y[i+1]))
+        dist_bearing = np.array(dist_bearing)    
+        self.info = np.column_stack((x[:-1], y[:-1], dist_bearing)) 
+        self.v = 
         
         
         
