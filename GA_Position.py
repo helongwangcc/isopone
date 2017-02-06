@@ -65,18 +65,20 @@ class GA_position:
             index = int(normal(mean_node, std_node) + 0.5)
             if (index >= 0) & (index < self.num):
                 node_ind.append(index)
+        node_ind.insert(0, 0)
+        node_ind.append(0)
         node_ind = np.array(node_ind)
         # SELECT POINTS USING UNIFORM DISTRIBUTION
 #        node_ind = randint(0, self.num - 1, length_set - 2)
+#        points = []
+#        points.append(self.nodeset[0])
+#        for i, j in enumerate(self.nodeset[1:-1]):
+#            points.append(j[node_ind[i]])
+#        points.append(self.nodeset[-1])
         rate_ind = randint(0, length_rate, length_set - 1)
-        points = []
-        points.append(self.nodeset[0])
-        for i, j in enumerate(self.nodeset[1:-1]):
-            points.append(j[node_ind[i]])
-        points.append(self.nodeset[-1])
             
         
-        return [np.array(points), rate_ind]
+        return [node_ind, rate_ind]
     
     def population(self, count):
         '''
@@ -89,7 +91,12 @@ class GA_position:
             ind = []
             pos = individual[0]
             for i in range(len(pos) - 1):
-                ind.append(bathymetry.is_below_depth(pos[i], pos[i+1], DEPTH_LIMIT))
+                if i == 0:
+                    ind.append(bathymetry.is_below_depth(self.nodeset[i], self.nodeset[i+1][pos[i+1]], DEPTH_LIMIT))
+                elif i == len(pos) - 2:
+                    ind.append(bathymetry.is_below_depth(self.nodeset[i][pos[i]], self.nodeset[i+1], DEPTH_LIMIT))
+                else:
+                    ind.append(bathymetry.is_below_depth(self.nodeset[i][pos[i]], self.nodeset[i+1][pos[i+1]], DEPTH_LIMIT))
             ind = np.array(ind)
             if np.all(ind) == False:
                 continue
@@ -103,7 +110,16 @@ class GA_position:
         HYPOTHESIS AND LEARNING
         '''
         # HEADING
-        Pos, Pin = individual
+        Posin, Pin = individual
+        Pos = []
+        for i in range(len(Posin)):
+            if i == 0:
+                Pos.append(self.nodeset[i])
+            elif i == len(Posin) - 1:
+                Pos.append(self.nodeset[i])
+            else:
+                Pos.append(self.nodeset[i][Posin[i]])
+        Pos = np.array(Pos)
         Heading = []
         Dist = []
         fuel = []
@@ -132,22 +148,27 @@ class GA_position:
         
         return np.sum(fuel), time
     
-    def pareto(self, pop, Initial_time, speed):
+    def Pareto_search(self, pop, Initial_time, speed):
+        #INITIAL DISTANCE
         dist = 100
-        container = []
-        individual = pop.pop()
-        fuelc, time = self.fitness(individual, Initial_time, speed)
-        container.append([fuelc, time, individual])
-        while len(pop) > 0:
-            individual = pop.pop()
-            fuelc, time = self.fitness(individual, Initial_time, speed)
-
-            
-            container.append([fuelc, time, individual])
+        results = []
+        for individual in pop:
+            results.append(self.fitness(individual, Initial_time, speed))
+        results = np.array(results)
+        results = np.column_stack((results, np.arange(len(pop))))
+        results = results[results[:,0].argsort()]
+        ind = np.argwhere(results[:,1] <= results[0, 1]).ravel()
+        results = results[ind]
+        
+        return results, ind
             
         
         
-            
+#    def evolve(self, pop, target, retain = 0.2, random_select = 0.05, mutate = 0.01):
+#        # GENERATE POPULATION
+#        results =[]
+#        pop = self.population((len(self.nodeset) - 2) * len(self.powerrate))
+        
 
         
                          
@@ -206,11 +227,17 @@ ge = GA_position(p_dep, p_des, 20, 6, 51, 0.2)
 
 
 s = ge.individual()
-f, t = ge.fitness(s, 25, 20)
-
-#p = ge.population(10)
-
-#grid_drawing(ge.nodeset)
+res = ge.fitness(s,0,20)
+#pop = ge.population(10)
+#res, ind = ge.Pareto_search(pop,0, 20)
+#info = res[ind]
+#p = []
+#for i,j in enumerate(pop):
+#    if np.any(info[:,2] == i):
+#        p.append(pop[i][0])
+#
+#
+##grid_drawing(ge.nodeset)
 #m = Basemap(
 #  projection="merc",
 #  resolution='l',
@@ -240,8 +267,7 @@ f, t = ge.fitness(s, 25, 20)
 #        X, Y = m(x, y)
 #        m.scatter(X, Y, marker='*',color='g')
 #for _ in p:
-#    k = _[0]
-#    x, y = m(k[:,0],k[:,1])
+#    x, y = m(_[:,0],_[:,1])
 #    m.plot(x,y,color='g')
 #m.drawcoastlines()
 #m.fillcontinents()
