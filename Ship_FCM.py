@@ -1044,5 +1044,21 @@ class Ship_FCM:
         vfit = fitfunc(self.Engine * rate)
         return vfit
         
+    def Power_to_speed(self, V_gps, enginerate, heading_ship, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft = 6.8):
+        if isinstance(heading_ship, float):
+            V = np.linspace(0.3 * V_gps, 1.1 * V_gps, 10)
+            PS = np.array(self.weather2fuel(V, heading_ship, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft))[1]
+            fitfunc = interp1d(PS, V, kind = 'cubic')
+            vfit = fitfunc(self.Engine * enginerate)
+        else:
+            vfit = []
+            V = np.linspace(0.3 * V_gps, 1.1 * V_gps, 10)
+            for heading in heading_ship:
+                Ps = np.array(self.weather2fuel(V, heading, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft))[1]
+                fitfunc = interp1d(Ps, V, kind = 'cubic')
+                vfit.append(fitfunc(self.Engine * enginerate))
+            vfit = np.array(vfit).ravel()
+        return vfit
+        
         
 
