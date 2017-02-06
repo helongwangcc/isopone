@@ -1,6 +1,6 @@
 import numpy as np
 from numpy.random import uniform 
-from numpy.random import rand, randint
+from numpy.random import rand, randint, normal
 from GeneralFunction import *
 from Ship_FCM import *
 import matplotlib.pyplot as plt
@@ -8,7 +8,14 @@ from matplotlib import animation
 from datetime import datetime, timedelta
 
 
-
+# BATHYMETRIC CLASS
+bathymetry = Bathymetry("GEBCO_2014_2D_-75.0_30.0_10.0_55.0.nc")
+# WATER DEPTH LIMITATION (m)
+DEPTH_LIMIT = -11
+# INITIATE WEATHER CLASS
+weather_info = WeatherInfo("Metdata_NorthAtlantic_2015-01-01-2015-01-31.mat")
+# INITIATE SHIP INFORMATION
+ship_info = Ship_FCM()
 
 class GA_position:
     
@@ -48,9 +55,20 @@ class GA_position:
         '''
         length_set = len(self.nodeset)
         length_rate = len(self.powerrate)
-        
-        node_ind = randint(0, self.num - 1, length_set - 2)
-        rate_ind = randint(0, length_rate - 1, length_set - 1)
+        # SELECT POINTS USING NORMAL DISTRIBUTION 
+        mean_node = (self.num - 1) / 2
+        std_node = float(self.num) / 6
+        node_ind = []
+        while True:
+            if len(node_ind) >= length_set - 2:
+                break
+            index = int(normal(mean_node, std_node) + 0.5)
+            if (index >= 0) & (index < self.num):
+                node_ind.append(index)
+        node_ind = np.array(node_ind)
+        # SELECT POINTS USING UNIFORM DISTRIBUTION
+#        node_ind = randint(0, self.num - 1, length_set - 2)
+        rate_ind = randint(0, length_rate, length_set - 1)
         points = []
         points.append(self.nodeset[0])
         for i, j in enumerate(self.nodeset[1:-1]):
@@ -58,10 +76,81 @@ class GA_position:
         points.append(self.nodeset[-1])
             
         
-        return np.array(points)
+        return [np.array(points), rate_ind]
+    
+    def population(self, count):
+        '''
+        CREATE A NUMBER OF INDIVIDUALS
+        '''
+        container = []
+        while len(container) < count:
+            # ADD CONSTRAINTS FOR EACH INDIVIDUALS
+            individual = self.individual()
+            ind = []
+            pos = individual[0]
+            for i in range(len(pos) - 1):
+                ind.append(bathymetry.is_below_depth(pos[i], pos[i+1], DEPTH_LIMIT))
+            ind = np.array(ind)
+            if np.all(ind) == False:
+                continue
+            else:
+                container.append(individual)
+        
+        return container
+    
+    def fitness(self, individual, Initial_time, speed):
+        '''
+        HYPOTHESIS AND LEARNING
+        '''
+        # HEADING
+        Pos, Pin = individual
+        Heading = []
+        Dist = []
+        fuel = []
+        for i in range(len(Pos) - 1):
+            Dist.append(greatcircle_inverse(Pos[i][0], Pos[i][1], Pos[i+1][0], Pos[i+1][1])[0])
+            Heading.append(greatcircle_inverse(Pos[i][0], Pos[i][1], Pos[i+1][0], Pos[i+1][1])[1])
+        Heading = np.array(Heading)
+        Dist = np.array(Dist)
+        Powerrate = self.powerrate[Pin]
+        time = Initial_time
+        for i in range(len(Pos) - 1):
+            Hs = weather_info.hs([Pos[i][1], Pos[i][0], time])        
+            wind_U = weather_info.u([Pos[i][1], Pos[i][0], time]) / 0.5144
+            wind_V = weather_info.v([Pos[i][1], Pos[i][0], time]) / 0.5144        
+            Tp = weather_info.tp([Pos[i][1], Pos[i][0], time])
+            head = weather_info.hdg([Pos[i][1], Pos[i][0], time])
+            cu = weather_info.cu([Pos[i][1], Pos[i][0], time])
+            cv = weather_info.cv([Pos[i][1], Pos[i][0], time])
+            # WATER DEPTH
+            depth = bathymetry.water_depth(Pos[i])
+            v = ship_info.Power_to_speed(speed, Powerrate[i], Heading[i], cu, cv, depth, wind_U, wind_V, Hs, Tp, head)
+            fuelc = ship_info.weather2fuel(v, Heading[i], cu, cv, depth, wind_U, wind_V, Hs, Tp, head)
+            fuel.append(fuelc[3] * Dist[i] / 1.852)
+            time = Dist[i] / v / 1.852 + time
+            
+        
+        return np.sum(fuel), time
+    
+    def pareto(self, pop, Initial_time, speed):
+        dist = 100
+        container = []
+        individual = pop.pop()
+        fuelc, time = self.fitness(individual, Initial_time, speed)
+        container.append([fuelc, time, individual])
+        while len(pop) > 0:
+            individual = pop.pop()
+            fuelc, time = self.fitness(individual, Initial_time, speed)
+
+            
+            container.append([fuelc, time, individual])
+            
         
         
+            
+
         
+                         
 
 
 
@@ -114,41 +203,48 @@ p_des = np.array([-65.0, 40.0])
 
 ge = GA_position(p_dep, p_des, 20, 6, 15, 0.2)
 
+
+
 s = ge.individual()
+f, t = ge.fitness(s, 25, 20)
+
+#p = ge.population(10)
 
 #grid_drawing(ge.nodeset)
-m = Basemap(
-  projection="merc",
-  resolution='l',
-  area_thresh=0.1,
-  llcrnrlon=-75,
-  llcrnrlat=35,
-  urcrnrlon=10,
-  urcrnrlat=55
-)
-
-
-plt.figure(figsize=(20, 15))
-grid = ge.nodeset
-for i in range(len(grid)):
-    
-    if i == 0:
-        x, y = grid[i]
-        X, Y = m(x, y)
-        m.scatter(X, Y, marker='D',color='r')
-    elif i == len(grid) - 1:
-        x, y = grid[i]
-        X, Y = m(x, y)
-        m.scatter(X, Y, marker='D',color='k')
-    else:
-        x = grid[i][:,0]
-        y = grid[i][:,1]
-        X, Y = m(x, y)
-        m.scatter(X, Y, marker='*',color='g')
-x, y = m(s[:,0],s[:,1])
-m.plot(x,y,color='g')
-m.drawcoastlines()
-m.fillcontinents()
-m.drawparallels(np.arange(-90.,120.,5.), labels=[1,0,0,0], fontsize=15)
-m.drawmeridians(np.arange(-180.,180.,5.), labels=[0,0,0,1], fontsize=15)
-plt.show()
+#m = Basemap(
+#  projection="merc",
+#  resolution='l',
+#  area_thresh=0.1,
+#  llcrnrlon=-75,
+#  llcrnrlat=35,
+#  urcrnrlon=10,
+#  urcrnrlat=55
+#)
+##
+##
+#plt.figure(figsize=(20, 15))
+#grid = ge.nodeset
+#for i in range(len(grid)):
+#    
+#    if i == 0:
+#        x, y = grid[i]
+#        X, Y = m(x, y)
+#        m.scatter(X, Y, marker='D',color='r')
+#    elif i == len(grid) - 1:
+#        x, y = grid[i]
+#        X, Y = m(x, y)
+#        m.scatter(X, Y, marker='D',color='k')
+#    else:
+#        x = grid[i][:,0]
+#        y = grid[i][:,1]
+#        X, Y = m(x, y)
+#        m.scatter(X, Y, marker='*',color='g')
+#for _ in p:
+#    k = _[0]
+#    x, y = m(k[:,0],k[:,1])
+#    m.plot(x,y,color='g')
+#m.drawcoastlines()
+#m.fillcontinents()
+#m.drawparallels(np.arange(-90.,120.,5.), labels=[1,0,0,0], fontsize=15)
+#m.drawmeridians(np.arange(-180.,180.,5.), labels=[0,0,0,1], fontsize=15)
+#plt.show()

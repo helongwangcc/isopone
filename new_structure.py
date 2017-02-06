@@ -171,25 +171,25 @@ class state:
         
         return ginfo
        
-## departure
-#p_dep = np.array([-5.0, 49.0])
-## destination
-#p_des = np.array([-65.0, 40.0])
-#
-## lowest fuel consumption
-#calm_r = ship_info.weather2fuel(20, 0, 0, 0, -10000, 0, 0, 0.01, 0.01, 0)
-#minifuelc = calm_r[3] * greatcircle_inverse(p_dep[0], p_dep[1], p_des[0], p_des[1])[0] / 1.852
-#
-#
-#initial_time = 25
-#velocity = 20
-#
-#
-#gentic = state(p_dep,p_des, 40, initial_time, velocity)
-#
-#
-#pop, results = gentic.recursion(0, 1000, 5, 0.2, 0.05, 0.1)
-#inform =gentic.gatherinfo(pop, minifuelc)
+# departure
+p_dep = np.array([-5.0, 49.0])
+# destination
+p_des = np.array([-65.0, 40.0])
+
+# lowest fuel consumption
+calm_r = ship_info.weather2fuel(20, 0, 0, 0, -10000, 0, 0, 0.01, 0.01, 0)
+minifuelc = calm_r[3] * greatcircle_inverse(p_dep[0], p_dep[1], p_des[0], p_des[1])[0] / 1.852
+
+
+initial_time = 25
+velocity = 20
+
+
+gentic = state(p_dep,p_des, 40, initial_time, velocity)
+
+
+pop, results = gentic.recursion(0, 1000, 5, 0.2, 0.05, 0.1)
+inform =gentic.gatherinfo(pop, minifuelc)
 
 
 
