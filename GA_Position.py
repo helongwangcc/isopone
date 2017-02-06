@@ -112,7 +112,7 @@ p_dep = np.array([-5.0, 49.0])
 # destination
 p_des = np.array([-65.0, 40.0])
 
-ge = GA_position(p_dep, p_des, 20, 6, 15, 0.2)
+ge = GA_position(p_dep, p_des, 20, 6, 51, 0.2)
 
 s = ge.individual()
 
