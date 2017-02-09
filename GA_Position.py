@@ -148,29 +148,97 @@ class GA_position:
         
         return np.sum(fuel), time
     
-    def Pareto_search(self, pop, Initial_time, speed):
+    def Pareto_search(self, Initial_time, speed):
         #INITIAL DISTANCE
-        dist = 100
+        dist = 20
+        container = []
+        while len(container) < dist:
+            pop = self.population(1000)
+            if container ==[]:
+                pass
+            else:
+                for element in container:
+                    pop.append(element)
+            results = []
+            for individual in pop:
+                results.append(self.fitness(individual, Initial_time, speed))
+            results = np.array(results)
+            is_efficient = np.ones(results.shape[0], dtype = bool)
+            for i, c in enumerate(results):
+                if is_efficient[i]:
+                    is_efficient[is_efficient] = np.any(results[is_efficient] <= c, axis = 1)
+            container = []
+            for i in range(len(pop)):
+                if is_efficient[i] == True:
+                    container.append(pop[i])
+            graded = [(results[i][0], pop[i]) for i in xrange(len(pop))]
+      
+        return container, results[is_efficient]
+            
+        
+        
+    def evolve(self, pop, Initial_time, speed, retain = 0.2, random_select = 0.05, mutate = 0.01):
+        parents = []
         results = []
         for individual in pop:
             results.append(self.fitness(individual, Initial_time, speed))
         results = np.array(results)
-        results = np.column_stack((results, np.arange(len(pop))))
-        results = results[results[:,0].argsort()]
-        ind = np.argwhere(results[:,1] <= results[0, 1]).ravel()
-        results = results[ind]
+        is_efficient = np.ones(results.shape[0], dtype = bool)
+        for i, c in enumerate(results):
+            if is_efficient[i]:
+                is_efficient[is_efficient] = np.any(results[is_efficient] <= c, axis = 1)
         
-        return results, ind
-            
-        
-        
-#    def evolve(self, pop, target, retain = 0.2, random_select = 0.05, mutate = 0.01):
-#        # GENERATE POPULATION
-#        results =[]
-#        pop = self.population((len(self.nodeset) - 2) * len(self.powerrate))
-        
+        print results[is_efficient]
+        graded = [(results[i][0], pop[i]) for i in xrange(len(pop))]
+        graded = [x[1] for x in sorted(graded, key = lambda tup : tup[0])]
+        retain_length = int(len(graded) * retain)
+        parents = graded[:retain_length]
 
+        # RANDOMLY ADD OTHER INDIVIDUALS TO PROMOTE GENETIC DIVERSITY
+        for individual in graded[retain_length:]:
+            if random_select > rand():
+                parents.append(individual)  
+            
+        # MUTATE SOME INDIVIDUALS
+        # SELECT POINTS USING NORMAL DISTRIBUTION 
+        mean_node = (self.num - 1) / 2
+        std_node = float(self.num) / 6
+        for individual in parents:
+            if mutate > rand():
+                pos_to_mutate = randint(0, len(individual[0]) - 1)
+                index = int(normal(mean_node, std_node) + 0.5)
+                if (index >= 0) & (index < self.num):
+                    individual[0][pos_to_mutate] = index
+                individual[1][pos_to_mutate] =  randint(0, len(self.powerrate))                
+                
+        # ADD PARETO SOLUTIONS        
+        for i in range(len(pop)):
+            if pop[i] in parents:
+                print i
+#            if is_efficient[i] == True:
+#                if not pop[i] in parents:
+#                    parents.append(pop[i])
         
+        
+        # CROSSOVER PARENTS TO CREATE CHILDREN
+        parents_length = len(parents)
+        desired_length = len(pop) - parents_length
+        children = []
+        while len(children) < desired_length:
+            male = randint(0, parents_length - 1)
+            female = randint(0, parents_length - 1)
+            if male != female:
+                male = parents[male]
+                female = parents[female]
+                half = len(male) / 2
+                child = male[:half] + female[half:]
+                children.append(child)
+    
+        parents.extend(children)
+        
+        return parents 
+        
+#    def Pareto_solution(pop)
                          
 
 
@@ -224,12 +292,16 @@ p_des = np.array([-65.0, 40.0])
 
 ge = GA_position(p_dep, p_des, 20, 6, 51, 0.2)
 
+pop = ge.population(100)
+for i in range(20):
+    pop = ge.evolve(pop, 0, 20)
 
 
-s = ge.individual()
-res = ge.fitness(s,0,20)
-#pop = ge.population(10)
-#res, ind = ge.Pareto_search(pop,0, 20)
+
+#s = ge.individual()
+#res = ge.fitness(s,0,20)
+#pop = ge.population(100)
+#population, res = ge.Pareto_search(0, 20)
 #info = res[ind]
 #p = []
 #for i,j in enumerate(pop):
