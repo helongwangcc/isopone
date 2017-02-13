@@ -49,25 +49,35 @@ class GA_position:
         ####
         self.powerrate = np.array([0.5, 0.6, 0.75, 0.85, 1.0])
         
-    def individual(self):
+    def individual(self, initial = False):
         '''
         CREATE A MEMBER OF POPULATION 
         '''
+        
         length_set = len(self.nodeset)
         length_rate = len(self.powerrate)
-        # SELECT POINTS USING NORMAL DISTRIBUTION 
-        mean_node = (self.num - 1) / 2
-        std_node = float(self.num) / 6
-        node_ind = []
-        while True:
-            if len(node_ind) >= length_set - 2:
-                break
-            index = int(normal(mean_node, std_node) + 0.5)
-            if (index >= 0) & (index < self.num):
-                node_ind.append(index)
-        node_ind.insert(0, 0)
-        node_ind.append(0)
-        node_ind = np.array(node_ind)
+        if initial == False:
+            # SELECT POINTS USING NORMAL DISTRIBUTION 
+            mean_node = (self.num - 1) / 2
+            std_node = float(self.num) / 6
+            node_ind = []
+            while True:
+                if len(node_ind) >= length_set - 2:
+                    break
+                index = int(normal(mean_node, std_node) + 0.5)
+                if (index >= 0) & (index < self.num):
+                    node_ind.append(index)
+            node_ind.insert(0, 0)
+            node_ind.append(0)
+            node_ind = np.array(node_ind)
+            rate_ind = randint(0, length_rate, length_set - 1)
+        else:
+            # THIS STEP IS TO SELECT THE SHORTEST PATH
+            node_ind = [(self.num + 1) / 2 for i in range(length_set - 2)]
+            node_ind.insert(0, 0)
+            node_ind.append(0)
+            node_ind = np.array(node_ind)
+            rate_ind = randint(0, length_rate, length_set - 1)
         # SELECT POINTS USING UNIFORM DISTRIBUTION
 #        node_ind = randint(0, self.num - 1, length_set - 2)
 #        points = []
@@ -75,33 +85,35 @@ class GA_position:
 #        for i, j in enumerate(self.nodeset[1:-1]):
 #            points.append(j[node_ind[i]])
 #        points.append(self.nodeset[-1])
-        rate_ind = randint(0, length_rate, length_set - 1)
-            
-        
+
         return [node_ind, rate_ind]
     
-    def population(self, count):
+    def population(self, count, initial = False):
         '''
         CREATE A NUMBER OF INDIVIDUALS
         '''
         container = []
-        while len(container) < count:
-            # ADD CONSTRAINTS FOR EACH INDIVIDUALS
-            individual = self.individual()
-            ind = []
-            pos = individual[0]
-            for i in range(len(pos) - 1):
-                if i == 0:
-                    ind.append(bathymetry.is_below_depth(self.nodeset[i], self.nodeset[i+1][pos[i+1]], DEPTH_LIMIT))
-                elif i == len(pos) - 2:
-                    ind.append(bathymetry.is_below_depth(self.nodeset[i][pos[i]], self.nodeset[i+1], DEPTH_LIMIT))
+        if initial == False:
+            while len(container) < count:
+                # ADD CONSTRAINTS FOR EACH INDIVIDUALS
+                individual = self.individual()
+                ind = []
+                pos = individual[0]
+                for i in range(len(pos) - 1):
+                    if i == 0:
+                        ind.append(bathymetry.is_below_depth(self.nodeset[i], self.nodeset[i+1][pos[i+1]], DEPTH_LIMIT))
+                    elif i == len(pos) - 2:
+                        ind.append(bathymetry.is_below_depth(self.nodeset[i][pos[i]], self.nodeset[i+1], DEPTH_LIMIT))
+                    else:
+                        ind.append(bathymetry.is_below_depth(self.nodeset[i][pos[i]], self.nodeset[i+1][pos[i+1]], DEPTH_LIMIT))
+                ind = np.array(ind)
+                if np.all(ind) == False:
+                    continue
                 else:
-                    ind.append(bathymetry.is_below_depth(self.nodeset[i][pos[i]], self.nodeset[i+1][pos[i+1]], DEPTH_LIMIT))
-            ind = np.array(ind)
-            if np.all(ind) == False:
-                continue
-            else:
-                container.append(individual)
+                    container.append(individual)
+        else:
+            while len(container) < count:
+                container.append(self.individual(initial))
         
         return container
     
@@ -147,6 +159,72 @@ class GA_position:
             
         
         return np.sum(fuel), time
+    
+    def Spath_search(self, count):
+        # FIRST ADD SHORTEST PATH
+        return
+    
+    def Spath_evolve(self, pop, Initial_time, speed, retain = 0.2, random_select = 0.05, mutate = 0.01):
+        # POSITION FIXED
+        results = []
+        for individual in pop:
+            results.append(self.fitness(individual, Initial_time, speed))
+        results = np.array(results)
+        is_efficient = np.ones(results.shape[0], dtype = bool)
+        for i, c in enumerate(results):
+            if is_efficient[i]:
+                is_efficient[is_efficient] = np.any(results[is_efficient] <= c, axis = 1)
+                
+        graded = [(results[i][0], pop[i][1]) for i in xrange(len(pop))]
+        graded = [x[1] for x in sorted(graded, key = lambda tup : tup[0])]
+        retain_length = int(len(graded) * retain)
+        parents = graded[:retain_length]
+        
+        print np.sum(is_efficient)
+        # ADD PARETO SOLUTIONS     
+        for i in range(len(pop)):
+            if is_efficient[i] == True:
+                if not any((pop[i][1] == x).all() for x in parents):
+                    if rand() > 0.3:
+                        parents.append(pop[i][1])
+    
+        # RANDOMLY ADD OTHER INDIVIDUALS TO PROMOTE GENETIC DIVERSITY
+        for individual in graded[retain_length:]:
+            if random_select > rand():
+                parents.append(individual)
+    
+    
+        # MUTATE SOME INDIVIDUALS
+        for individual in parents:
+            if mutate > rand():
+                changenum = randint(1, int(len(individual) / 4))
+                pos_to_mutate = randint(0, len(individual) - 1, changenum)
+                individual[pos_to_mutate] = randint(2, len(self.powerrate), changenum) 
+    
+    
+        # CROSSOVER PARENTS TO CREATE CHILDREN
+        parents_length = len(parents)
+        desired_length = len(pop) - parents_length
+        children = []
+        while len(children) < desired_length:
+            male = randint(0, parents_length - 1)
+            female = randint(0, parents_length - 1)
+            if male != female:
+                male = parents[male]
+                female = parents[female]
+                half = len(male) / 2
+                child = male[:half].tolist() + female[half:].tolist()
+                child = np.array(child)
+                children.append(child)
+    
+        parents.extend(children)
+        
+        generation = []
+        for i in parents:
+            generation.append([pop[0][0], i])
+        return generation, results
+       
+        
     
     def Pareto_search(self, Initial_time, speed):
         #INITIAL DISTANCE
@@ -238,7 +316,7 @@ class GA_position:
         
         return parents 
         
-#    def Pareto_solution(pop)
+
                          
 
 
@@ -292,23 +370,21 @@ p_des = np.array([-65.0, 40.0])
 
 ge = GA_position(p_dep, p_des, 20, 6, 51, 0.2)
 
-pop = ge.population(100)
-for i in range(20):
-    pop = ge.evolve(pop, 0, 20)
+pop = ge.population(1000, True)
+p=[]
+r=[]
+for i in range(8):
+    pop, res = ge.Spath_evolve(pop, 0, 20, 0.15, 0.05,01)
+    p.append(pop)
+    r.append(res)
+#for i in range(20):
+#    pop = ge.evolve(pop, 0, 20)
 
 
 
-#s = ge.individual()
-#res = ge.fitness(s,0,20)
-#pop = ge.population(100)
-#population, res = ge.Pareto_search(0, 20)
-#info = res[ind]
-#p = []
-#for i,j in enumerate(pop):
-#    if np.any(info[:,2] == i):
-#        p.append(pop[i][0])
-#
-#
+
+
+
 ##grid_drawing(ge.nodeset)
 #m = Basemap(
 #  projection="merc",
@@ -319,8 +395,6 @@ for i in range(20):
 #  urcrnrlon=10,
 #  urcrnrlat=55
 #)
-##
-##
 #plt.figure(figsize=(20, 15))
 #grid = ge.nodeset
 #for i in range(len(grid)):
