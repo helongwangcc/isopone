@@ -29,6 +29,13 @@ def Reflection_indices(dconst, angle):
     H = np.power(np.abs(H), 2)
     return V, H
     
+def trans_bright(f,theta, temp, waterc):
+    theta = np.radians(theta)
+    gamma = waterc * f * 0.6
+    tao = gamma / np.cos(theta)
+    
+    trans = np.exp(-tao)
+    return trans
 a = Dielectric_const(290, 30)
 
 v, h = Reflection_indices(a, 30)

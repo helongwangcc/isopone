@@ -67,6 +67,50 @@ class GA_position:
             rate_ind = randint(0, length_rate, length_set - 1)
         
         return rate_ind
+        
+    def individual(self):
+        '''
+        CREATE A MEMBER OF POPULATION 
+        '''
+        
+        length_set = len(self.nodeset)
+        length_rate = len(self.powerrate)
+        
+        if rand() > 0.5:
+            
+            sn = randint(0, length_set - 1)
+            sno = randint(0,length_set - 1, sn)
+            rate_ind = np.ones(length_set - 1, dtype = np.int) * randint(length_rate - 2, length_rate)
+            rate_ind[sno] = randint(0, length_rate, sn)
+            
+            sn1 = randint(0, length_set - 2)
+            sno1 = randint(0, self.num - 1, sn1)
+            node_ind = np.ones(length_set - 2, dtype = np.int) * (self.num - 1) / 2
+            node_ind[sno1] = randint(0, self.num - 1, sn1)
+            
+            node_ind = node_ind.tolist()
+            node_ind.insert(0, 0)
+            node_ind.append(0)
+            node_ind = np.array(node_ind)
+        else:            
+            # SELECT POINTS USING NORMAL DISTRIBUTION 
+            mean_node = (self.num - 1) / 2
+            std_node = float(self.num) / 6
+            node_ind = []
+            while True:
+                if len(node_ind) >= length_set - 2:
+                    break
+                index = int(normal(mean_node, std_node) + 0.5)
+                if (index >= 0) & (index < self.num):
+                    node_ind.append(index)
+            node_ind.insert(0, 0)
+            node_ind.append(0)
+            node_ind = np.array(node_ind)
+            rate_ind = randint(0, length_rate, length_set - 1)
+        
+        return [node_ind, rate_ind]
+        
+        
     
     def sp_population(self, count):
         
@@ -139,7 +183,7 @@ class GA_position:
         grade = [(self.sp_fitness(x, Initial_time, speed, ETA, r), x) for x in pop]
         graded = [x[1] for x in sorted(grade, key = lambda tup : tup[0])]
 #        result = sum([x[0] for x in sorted(grade, key = lambda tup : tup[0])]) / (len(graded) * 1.0)
-        result = sum([x[0] for x in grade]) / (len(graded) * 1.0)
+        result = [x[0] for x in grade]
         retain_length = int(len(graded) * retain)
         parents = graded[:retain_length]
     
@@ -182,26 +226,25 @@ class GA_position:
         res = []
         container.append(pop)
         while True:
-            pop, result = self.sp_evolve(pop, Initial_time, speed, ETA, r)
+            pop, result = self.sp_evolve(pop, Initial_time, speed, ETA, r, retain, random_select, mutate)
             container.append(pop)
-            res.append(result)
+            res.append(sum(result) / len(pop))
+            print res
             if np.diff(res).size == 0:
                 continue
             else:
-                print np.diff(res)
                 cr = np.diff(res)[-1] / res[-1]
-                if cr < 0:
+                if cr > 0:
                     container.pop()
                     pop = container[-1]
                     break
-                elif cr < 10e-3:
+                elif abs(cr) < 10e-3:
                     break
                 else:
                     continue
 #        res.append(sum([self.sp_fitness(x, Initial_time, speed, ETA, r) for x in pop] )/ (len(pop) * 1.0))
         fitness = [self.sp_fitness(x, Initial_time, speed, ETA, r) for x in pop] 
         return pop, fitness
-    
     
     
 
@@ -216,12 +259,10 @@ p_dep = np.array([-5.0, 49.0])
 p_des = np.array([-65.0, 40.0])
 
 ge = GA_position(p_dep, p_des, 20, 6, 51, 0.2)
-container = []
-res = []
-p = ge.sp_population(300)
+#p = ge.sp_population(300)
 
-pop,res = ge.sp_recursion(p,0,20,140,20000)
-
+#pop,res,con = ge.sp_recursion(p, 0, 20, 140, 20000, 0.2, 0.05, 0.2)
+ 
 
 #for i in xrange(5):
 #    container.append(p)
