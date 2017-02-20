@@ -49,7 +49,47 @@ class GA_position:
         self.powerrate = np.array([0.5, 0.6, 0.75, 0.85, 1.0])
         #################################################################
             
-            
+    def estimate_time(self, Initial_time, speed):
+        length_set = len(self.nodeset)
+        length_rate = len(self.powerrate)
+        node_ind = [(self.num - 1) / 2 for i in range(length_set - 2)] 
+        node_ind.insert(0, 0)
+        node_ind.append(0)
+        node_ind = np.array(node_ind)
+        rate_ind = np.ones(length_set - 1, dtype = np.int) * (length_rate - 1)
+        Pos = []
+        for i in range(len(node_ind)):
+            if i == 0:
+                Pos.append(self.nodeset[i])
+            elif i == len(node_ind) - 1:
+                Pos.append(self.nodeset[i])
+            else:
+                Pos.append(self.nodeset[i][node_ind[i]])
+        Pos = np.array(Pos)
+        Heading = []
+        Dist = []
+        for i in range(len(Pos) - 1):
+            Dist.append(greatcircle_inverse(Pos[i][0], Pos[i][1], Pos[i+1][0], Pos[i+1][1])[0])
+            Heading.append(greatcircle_inverse(Pos[i][0], Pos[i][1], Pos[i+1][0], Pos[i+1][1])[1])
+        Heading = np.array(Heading)
+        Dist = np.array(Dist)
+        Powerrate = self.powerrate[rate_ind]
+        time = Initial_time
+        for i in range(len(Pos) - 1):
+            Hs = weather_info.hs([Pos[i][1], Pos[i][0], time])        
+            wind_U = weather_info.u([Pos[i][1], Pos[i][0], time]) / 0.5144
+            wind_V = weather_info.v([Pos[i][1], Pos[i][0], time]) / 0.5144        
+            Tp = weather_info.tp([Pos[i][1], Pos[i][0], time])
+            head = weather_info.hdg([Pos[i][1], Pos[i][0], time])
+            cu = weather_info.cu([Pos[i][1], Pos[i][0], time])
+            cv = weather_info.cv([Pos[i][1], Pos[i][0], time])
+            # WATER DEPTH
+            depth = bathymetry.water_depth(Pos[i])
+            v = ship_info.Power_to_speed(speed, Powerrate[i], Heading[i], cu, cv, depth, wind_U, wind_V, Hs, Tp, head)
+            time = Dist[i] / v / 1.852 + time
+        
+        return time
+        
     def sp_individual(self):
         '''
         CREATE A MEMBER OF POPULATION 
@@ -76,36 +116,32 @@ class GA_position:
         length_set = len(self.nodeset)
         length_rate = len(self.powerrate)
         
-        if rand() > 0.5:
-            
+        
+#        sn1 = randint(0, int((length_set - 2) / 2))
+        sn1 = randint(0, length_set - 2)
+        sno1 = randint(0, length_set - 2, sn1)
+        node_ind = np.ones(length_set - 2, dtype = np.int) * (self.num - 1) / 2
+#        node_ind[sno1] = randint(0, self.num - 1, sn1)
+        # SELECT POINTS USING NORMAL DISTRIBUTION 
+        mean_node = (self.num - 1) / 2
+        std_node = float(self.num) / 6
+        for i in sno1:
+            while True:
+                index = int(normal(mean_node, std_node) + 0.5)
+                if (index >= 0) & (index < self.num):
+                    node_ind[i] = index
+                    break
+        node_ind = node_ind.tolist()
+        node_ind.insert(0, 0)
+        node_ind.append(0)
+        node_ind = np.array(node_ind)
+        
+        if rand() > 0.5:            
             sn = randint(0, length_set - 1)
             sno = randint(0,length_set - 1, sn)
             rate_ind = np.ones(length_set - 1, dtype = np.int) * randint(length_rate - 2, length_rate)
-            rate_ind[sno] = randint(0, length_rate, sn)
-            
-            sn1 = randint(0, length_set - 2)
-            sno1 = randint(0, self.num - 1, sn1)
-            node_ind = np.ones(length_set - 2, dtype = np.int) * (self.num - 1) / 2
-            node_ind[sno1] = randint(0, self.num - 1, sn1)
-            
-            node_ind = node_ind.tolist()
-            node_ind.insert(0, 0)
-            node_ind.append(0)
-            node_ind = np.array(node_ind)
-        else:            
-            # SELECT POINTS USING NORMAL DISTRIBUTION 
-            mean_node = (self.num - 1) / 2
-            std_node = float(self.num) / 6
-            node_ind = []
-            while True:
-                if len(node_ind) >= length_set - 2:
-                    break
-                index = int(normal(mean_node, std_node) + 0.5)
-                if (index >= 0) & (index < self.num):
-                    node_ind.append(index)
-            node_ind.insert(0, 0)
-            node_ind.append(0)
-            node_ind = np.array(node_ind)
+            rate_ind[sno] = randint(0, length_rate, sn)            
+        else:                        
             rate_ind = randint(0, length_rate, length_set - 1)
         
         return [node_ind, rate_ind]
@@ -117,6 +153,32 @@ class GA_position:
         container = []
         while len(container) < count:
             container.append(self.sp_individual())
+        
+        return container
+    
+    
+    def population(self, count):
+        '''
+        CREATE A NUMBER OF INDIVIDUALS
+        '''
+        container = []
+        while len(container) < count:
+        # ADD CONSTRAINTS FOR EACH INDIVIDUALS
+            individual = self.individual()
+            ind = []
+            pos = individual[0]
+            for i in range(len(pos) - 1):
+                if i == 0:
+                    ind.append(bathymetry.is_below_depth(self.nodeset[i], self.nodeset[i+1][pos[i+1]], DEPTH_LIMIT))
+                elif i == len(pos) - 2:
+                    ind.append(bathymetry.is_below_depth(self.nodeset[i][pos[i]], self.nodeset[i+1], DEPTH_LIMIT))
+                else:
+                    ind.append(bathymetry.is_below_depth(self.nodeset[i][pos[i]], self.nodeset[i+1][pos[i+1]], DEPTH_LIMIT))
+            ind = np.array(ind)
+            if np.all(ind) == False:
+                continue
+            else:
+                container.append(individual)
         
         return container
         
@@ -170,15 +232,54 @@ class GA_position:
         else:
             fitness = np.sum(fuel) + r * (time - ETA)
             
+        return fitness
+        
+    def fitness(self, individual, Initial_time, speed, ETA, r):
+        '''
+        HYPOTHESIS AND LEARNING
+        '''
+        # HEADING
+        Posin, Pin = individual
+        Pos = []
+        for i in range(len(Posin)):
+            if i == 0:
+                Pos.append(self.nodeset[i])
+            elif i == len(Posin) - 1:
+                Pos.append(self.nodeset[i])
+            else:
+                Pos.append(self.nodeset[i][Posin[i]])
+        Pos = np.array(Pos)
+        Heading = []
+        Dist = []
+        fuel = []
+        for i in range(len(Pos) - 1):
+            Dist.append(greatcircle_inverse(Pos[i][0], Pos[i][1], Pos[i+1][0], Pos[i+1][1])[0])
+            Heading.append(greatcircle_inverse(Pos[i][0], Pos[i][1], Pos[i+1][0], Pos[i+1][1])[1])
+        Heading = np.array(Heading)
+        Dist = np.array(Dist)
+        Powerrate = self.powerrate[Pin]
+        time = Initial_time
+        for i in range(len(Pos) - 1):
+            Hs = weather_info.hs([Pos[i][1], Pos[i][0], time])        
+            wind_U = weather_info.u([Pos[i][1], Pos[i][0], time]) / 0.5144
+            wind_V = weather_info.v([Pos[i][1], Pos[i][0], time]) / 0.5144        
+            Tp = weather_info.tp([Pos[i][1], Pos[i][0], time])
+            head = weather_info.hdg([Pos[i][1], Pos[i][0], time])
+            cu = weather_info.cu([Pos[i][1], Pos[i][0], time])
+            cv = weather_info.cv([Pos[i][1], Pos[i][0], time])
+            # WATER DEPTH
+            depth = bathymetry.water_depth(Pos[i])
+            v = ship_info.Power_to_speed(speed, Powerrate[i], Heading[i], cu, cv, depth, wind_U, wind_V, Hs, Tp, head)
+            fuelc = ship_info.weather2fuel(v, Heading[i], cu, cv, depth, wind_U, wind_V, Hs, Tp, head)
+            fuel.append(fuelc[3] * Dist[i] / 1.852)
+            time = Dist[i] / v / 1.852 + time
+        if time <= ETA:
+            fitness = np.sum(fuel)
+        else:
+            fitness = np.sum(fuel) + r * (time - ETA)            
         
         return fitness
         
-    def sp_grade(self, pop, Initial_time, speed, ETA, r):
-        
-        summed = sum([self.sp_fitness(x, Initial_time, speed, ETA, r) for x in pop])
-        return summed / (len(pop) * 1.0)
-        
-   
     def sp_evolve(self, pop, Initial_time, speed, ETA, r, retain = 0.2, random_select = 0.05, mutate = 0.01):
         grade = [(self.sp_fitness(x, Initial_time, speed, ETA, r), x) for x in pop]
         graded = [x[1] for x in sorted(grade, key = lambda tup : tup[0])]
@@ -219,6 +320,50 @@ class GA_position:
         parents.extend(children)    
     
         return parents, result
+    
+    def evolve(self, pop, Initial_time, speed, ETA, r, retain = 0.2, random_select = 0.05, mutate = 0.01):
+        
+        grade = [(self.fitness(x, Initial_time, speed, ETA, r), x) for x in pop]
+        graded = [x[1] for x in sorted(grade, key = lambda tup : tup[0])]
+        result = [x[0] for x in grade]
+        retain_length = int(len(graded) * retain)
+        parents = graded[:retain_length]
+
+        # RANDOMLY ADD OTHER INDIVIDUALS TO PROMOTE GENETIC DIVERSITY
+        for individual in graded[retain_length:]:
+            if random_select > rand():
+                parents.append(individual)  
+            
+        # MUTATE SOME INDIVIDUALS
+        # SELECT POINTS USING NORMAL DISTRIBUTION 
+        mean_node = (self.num - 1) / 2
+        std_node = float(self.num) / 6
+        for individual in parents:
+            if mutate > rand():
+                pos_to_mutate = randint(0, len(individual[0]) - 1)
+                index = int(normal(mean_node, std_node) + 0.5)
+                if (index >= 0) & (index < self.num):
+                    individual[0][pos_to_mutate] = index
+                individual[1][pos_to_mutate] =  randint(0, len(self.powerrate))                
+        
+        
+        # CROSSOVER PARENTS TO CREATE CHILDREN
+        parents_length = len(parents)
+        desired_length = len(pop) - parents_length
+        children = []
+        while len(children) < desired_length:
+            male = randint(0, parents_length - 1)
+            female = randint(0, parents_length - 1)
+            if male != female:
+                male = parents[male]
+                female = parents[female]
+                half = len(male) / 2
+                child = male[:half] + female[half:]
+                children.append(child)
+    
+        parents.extend(children)
+        
+        return parents, result
         
     def sp_recursion(self, pop, Initial_time, speed, ETA, r, retain = 0.2, random_select = 0.05, mutate = 0.01):
         #
@@ -258,12 +403,19 @@ p_dep = np.array([-5.0, 49.0])
 # destination
 p_des = np.array([-65.0, 40.0])
 
-ge = GA_position(p_dep, p_des, 20, 6, 51, 0.2)
+ge = GA_position(p_dep, p_des, 20, 6, 15, 0.2)
 #p = ge.sp_population(300)
-
-#pop,res,con = ge.sp_recursion(p, 0, 20, 140, 20000, 0.2, 0.05, 0.2)
+#
+#pop1, res1 = ge.sp_recursion(p, 25, 20, 160, 20000, 0.2, 0.05, 0.2)
+##
+#pop = ge.population(300)
+#
+#for i in range(10):
+#    pop,res = ge.evolve(pop, 25, 20, 160, 20000, 0.2, 0.05, 0.01)
  
 
+#for i in np.argsort(res)[0:20]:
+#    container.append((pop[i],res[i]))
 #for i in xrange(5):
 #    container.append(p)
 #    p,r = ge.sp_evolve(p, 0, 20, 140, 20000)
