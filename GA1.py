@@ -49,7 +49,7 @@ class GA_position:
         self.powerrate = np.array([0.5, 0.6, 0.75, 0.85, 1.0])
         #################################################################
             
-    def estimate_time(self, Initial_time, speed):
+    def estimation(self, Initial_time, speed):
         length_set = len(self.nodeset)
         length_rate = len(self.powerrate)
         node_ind = [(self.num - 1) / 2 for i in range(length_set - 2)] 
@@ -68,6 +68,7 @@ class GA_position:
         Pos = np.array(Pos)
         Heading = []
         Dist = []
+        fuel = []
         for i in range(len(Pos) - 1):
             Dist.append(greatcircle_inverse(Pos[i][0], Pos[i][1], Pos[i+1][0], Pos[i+1][1])[0])
             Heading.append(greatcircle_inverse(Pos[i][0], Pos[i][1], Pos[i+1][0], Pos[i+1][1])[1])
@@ -87,8 +88,12 @@ class GA_position:
             depth = bathymetry.water_depth(Pos[i])
             v = ship_info.Power_to_speed(speed, Powerrate[i], Heading[i], cu, cv, depth, wind_U, wind_V, Hs, Tp, head)
             time = Dist[i] / v / 1.852 + time
+#            fuelc = ship_info.weather2fuel(v, Heading[i], cu, cv, depth, wind_U, wind_V, Hs, Tp, head)
+#            fuel.append(fuelc[3] * Dist[i] / 1.852)
         
+#        return np.sum(fuel), time
         return time
+        
         
     def sp_individual(self):
         '''
@@ -108,20 +113,19 @@ class GA_position:
         
         return rate_ind
         
+        
     def individual(self):
         '''
         CREATE A MEMBER OF POPULATION 
         '''
         
         length_set = len(self.nodeset)
-        length_rate = len(self.powerrate)
+        length_rate = len(self.powerrate)   
         
-        
-#        sn1 = randint(0, int((length_set - 2) / 2))
         sn1 = randint(0, length_set - 2)
         sno1 = randint(0, length_set - 2, sn1)
         node_ind = np.ones(length_set - 2, dtype = np.int) * (self.num - 1) / 2
-#        node_ind[sno1] = randint(0, self.num - 1, sn1)
+
         # SELECT POINTS USING NORMAL DISTRIBUTION 
         mean_node = (self.num - 1) / 2
         std_node = float(self.num) / 6
@@ -147,7 +151,6 @@ class GA_position:
         return [node_ind, rate_ind]
         
         
-    
     def sp_population(self, count):
         
         container = []
@@ -181,6 +184,7 @@ class GA_position:
                 container.append(individual)
         
         return container
+        
         
     def sp_fitness(self, individual, Initial_time, speed, ETA, r):
         '''
@@ -227,6 +231,7 @@ class GA_position:
             fuelc = ship_info.weather2fuel(v, Heading[i], cu, cv, depth, wind_U, wind_V, Hs, Tp, head)
             fuel.append(fuelc[3] * Dist[i] / 1.852)
             time = Dist[i] / v / 1.852 + time
+        
         if time <= ETA:
             fitness = np.sum(fuel)
         else:
@@ -365,6 +370,7 @@ class GA_position:
         
         return parents, result
         
+        
     def sp_recursion(self, pop, Initial_time, speed, ETA, r, retain = 0.2, random_select = 0.05, mutate = 0.01):
         #
         container = []
@@ -374,7 +380,6 @@ class GA_position:
             pop, result = self.sp_evolve(pop, Initial_time, speed, ETA, r, retain, random_select, mutate)
             container.append(pop)
             res.append(sum(result) / len(pop))
-            print res
             if np.diff(res).size == 0:
                 continue
             else:
@@ -387,10 +392,36 @@ class GA_position:
                     break
                 else:
                     continue
-#        res.append(sum([self.sp_fitness(x, Initial_time, speed, ETA, r) for x in pop] )/ (len(pop) * 1.0))
         fitness = [self.sp_fitness(x, Initial_time, speed, ETA, r) for x in pop] 
+                   
         return pop, fitness
+        
     
+    def recursion(self, spnum, pnum, num_loop, Initial_time, speed, r):
+        length_set = len(self.nodeset)
+#        length_rate = len(self.powerrate)
+        node_ind = [(self.num - 1) / 2 for i in range(length_set - 2)] 
+        node_ind.insert(0, 0)
+        node_ind.append(0)
+        node_ind = np.array(node_ind)
+        # ESTIMTE TIME ARRIVAL
+        ETA = self.estimation(Initial_time, speed) + 20
+        # CREATE POPULATION OF SHORTEST PATH
+        sp_pop = self.sp_population(spnum)
+        # EVOLVE THE POPULATION 
+        sp_pop, spfit = self.sp_recursion(sp_pop, Initial_time, speed, ETA, r)
+        # CREATE NORMAL POPULATION
+        pop = self.population(pnum)
+        # PICK OPTIMAL INDIVIDUALS
+        num_pick = int(spnum / 10)
+        # ADD IT TO POPULATION
+        for i in np.argsort(spfit)[0: num_pick]:
+            pop.append([node_ind, sp_pop[i]])
+        for i in range(num_loop):
+            pop, res = self.evolve(pop, Initial_time, speed, ETA, r)
+        res = [self.fitness(x, Initial_time, speed, ETA, r) for x in pop]
+        
+        return pop, res
     
 
     
@@ -404,9 +435,11 @@ p_dep = np.array([-5.0, 49.0])
 p_des = np.array([-65.0, 40.0])
 
 ge = GA_position(p_dep, p_des, 20, 6, 15, 0.2)
-#p = ge.sp_population(300)
-#
-#pop1, res1 = ge.sp_recursion(p, 25, 20, 160, 20000, 0.2, 0.05, 0.2)
+
+#pop, res = ge.recursion(300, 300, 10, 0, 20, 20000)
+p = ge.sp_population(1000)
+
+pop1, res1 = ge.sp_recursion(p, 25, 20, 160, 20000, 0.2, 0.05, 0.2)
 ##
 #pop = ge.population(300)
 #

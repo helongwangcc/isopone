@@ -4,7 +4,7 @@ import numpy as np
 def Dielectric_const(T,f):
     if T > 273.15:
         theta = 300 / T
-        eta0 = 77.66 + 103.3 * (theta - 1)
+        eta0 = 77.66 + 103.3 * (theta - 1.0)
         eta1 = 0.0671 * eta0
         eta2 = 3.52
         gamma1 = 20.2 - 146 * (theta - 1) + 316 * pow((theta - 1), 2)
@@ -36,6 +36,6 @@ def trans_bright(f,theta, temp, waterc):
     
     trans = np.exp(-tao)
     return trans
-a = Dielectric_const(290, 30)
+a = Dielectric_const(290.0, 30.0)
 
-v, h = Reflection_indices(a, 30)
+v, h = Reflection_indices(a, 30.0)
