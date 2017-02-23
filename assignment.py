@@ -13,7 +13,10 @@ def Dielectric_const(T,f):
         eta = eta0 - f * ((eta0 - eta1) / (f + 1j * gamma1) + (eta1 - eta2) / (f + gamma2 * 1j))
         eta = eta.conjugate()
     else:
-        eta = 3.15 - 0.01 * 1j
+        if hasattr(f, "__len__"):
+            eta = np.ones(len(f)) * (3.15 - 0.01 * 1j)
+        else:
+            eta = 3.15 - 0.01 * 1j
     
     return eta
     
@@ -40,11 +43,18 @@ def trans_bright(f,theta, temp, waterc):
     t = np.exp(-tao)
     T = T0 * t + temp * (1 - t)
     return t, T
+
+def seaice_fm(f, polar, theta, ice_temp, ice_frac, waterc, temp):
+    num = len(f)
+    t, T = trans_bright(f, theta, temp, waterc)
+    eta = Dielectric_const(ice_temp, f)
+    V, H = Reflection_indices(eta, theta)
+    return V,H
     
+#t, T = trans_bright(30.0, 30.0, 290.0, 0.01)    
+f = np.linspace(20, 90, 15)
+V, H = seaice_fm(f, 0, 30, 260, 0, 0.01, 290) 
+
     
-t, T = trans_bright(30.0, 30.0, 290.0, 0.01)    
-    
-    
-    
-#a = Dielectric_const(290.0, 30.0)
+#a = Dielectric_const(260.0, 30)
 #v, h = Reflection_indices(a, 30.0)
