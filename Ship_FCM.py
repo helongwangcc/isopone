@@ -439,9 +439,6 @@ class Ship_FCM:
 
         Heading = np.arange(0, 185, 10)
 
-
-
-
         heading_ship2wind = np.array(heading_ship2wind)
         heading_ship2wind[heading_ship2wind < 0.0001] = 0.0001
         heading_ship2wind[heading_ship2wind > 180] = 360 - heading_ship2wind[heading_ship2wind > 180]
@@ -610,7 +607,12 @@ class Ship_FCM:
         
         # Modification of the original method to take into account the wave heading, period and ship speed.
         # Mod 1: effect due to large significant wave height
-        if Hs > 1:
+        # Mod 2 : add more effect on larger wave
+        # Mod 2 #################################################################
+        if Hs > 5:
+            factor1 = np.power(Hs* np.sqrt(ship_length / 100), 1.5)
+        ####################################################################
+        elif Hs > 1:
             factor1 =  np.power(Hs* np.sqrt(ship_length / 100), 1.0)   # first guest formula
         else:
             factor1 = np.power(Hs* np.sqrt(ship_length / 100), 0.5)   # first guest formula, need further research
@@ -859,7 +861,8 @@ class Ship_FCM:
         return [pE, pS, Fuel_kg_per_hour, Fuel_kg_per_nm]
     
     @staticmethod
-    def jonswap(hs, tp, gamma):    
+    def jonswap(hs, tp, gamma): 
+        
         omega = np.linspace(0.1, np.pi / 2, 50)
         wp = 2 * np.pi / tp
         sigma = np.where(omega < wp, 0.07, 0.09)
@@ -868,7 +871,9 @@ class Ship_FCM:
         amp = np.sqrt(2 * simps(sj, omega))
         ind = np.argmax(sj)
         wavelength = 2 * np.pi * 9.81 / np.power(omega[ind], 2)
+        
         return sj, amp, wavelength, omega[ind]
+        
     
     def R_WR(self, hs, tp, gamma):
         '''
@@ -921,6 +926,7 @@ class Ship_FCM:
         # RAW
         Raw = Rawm + Rawr
         return Raw / 1000
+        
 
     def speed_reduce(V, BN, disp, headAngleDegree, fr, C_B, loadCon = 1):
         '''
@@ -1018,6 +1024,7 @@ class Ship_FCM:
         vfit = fitfunc(self.Engine)
        
         return vfit
+        
     
     def power_to_speed(self, V_gps, heading_ship, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft = 6.8):
         if isinstance(heading_ship, float):
@@ -1045,6 +1052,10 @@ class Ship_FCM:
         return vfit
         
     def Power_to_speed(self, V_gps, enginerate, heading_ship, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft = 6.8):
+        '''
+        fitting function for different engine rate
+        '''
+        
         if isinstance(heading_ship, float):
             V = np.linspace(0.3 * V_gps, 1.1 * V_gps, 10)
             PS = np.array(self.weather2fuel(V, heading_ship, current_U, current_V, h_waterdepth, wind_U, wind_V, Hs, Tp, heading_wave, draft))[1]
@@ -1058,6 +1069,7 @@ class Ship_FCM:
                 fitfunc = interp1d(Ps, V, kind = 'cubic')
                 vfit.append(fitfunc(self.Engine * enginerate))
             vfit = np.array(vfit).ravel()
+            
         return vfit
         
         
