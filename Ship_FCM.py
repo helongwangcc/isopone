@@ -610,7 +610,7 @@ class Ship_FCM:
         # Mod 2 : add more effect on larger wave
         # Mod 2 #################################################################
         if Hs > 5:
-            factor1 = np.power(Hs* np.sqrt(ship_length / 100), 1.5)
+            factor1 = np.power(Hs* np.sqrt(ship_length / 100), 2.0)
         ####################################################################
         elif Hs > 1:
             factor1 =  np.power(Hs* np.sqrt(ship_length / 100), 1.0)   # first guest formula

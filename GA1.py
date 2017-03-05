@@ -567,7 +567,12 @@ class GA_position:
         return pop, fitness
     
     def recursion(self, spnum, pnum, num_loop, Initial_time, speed, r):
+        '''
+        spnum -- shortest path model population number
+        pnum -- population number
+        num_loop -- loop number of evolution
         
+        '''
         length_set = len(self.nodeset)
 #        length_rate = len(self.powerrate)
         node_ind = [(self.num - 1) / 2 for i in range(length_set - 2)] 
@@ -651,13 +656,19 @@ p_dep = np.array([-5.0, 49.0])
 p_des = np.array([-65.0, 40.0])
 # create object
 ge = GA_position(p_dep, p_des, 20, 6, 15, 0.2)
-#  
-#pop, res = ge.recursion(300, 300, 5, 25, 20, 20000)
-pop = ge.cp_population(1000)
-pop, res = ge.cp_recursion(pop, 25, 20, 170, 20000, 0.2, 0.05, 0.2)
+  
+pop, res = ge.recursion(300, 300, 5, 25, 20, 20000)
 
-pop1 = ge.sp_population(1000)
-pop1, res1 = ge.sp_recursion(pop1, 25, 20, 170, 20000, 0.2, 0.05, 0.2)
+
+
+## test constant power model
+## not working
+#pop = ge.cp_population(1000)
+#pop, res = ge.cp_recursion(pop, 25, 20, 170, 20000, 0.2, 0.05, 0.2)
+#
+## shortest path model
+#pop1 = ge.sp_population(1000)
+#pop1, res1 = ge.sp_recursion(pop1, 25, 20, 170, 20000, 0.2, 0.05, 0.2)
 
 
 
